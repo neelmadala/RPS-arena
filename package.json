@@ -1,0 +1,6 @@
+{
+  "name": "monad-rps-arena",
+  "private": true,
+  "scripts": { "compile": "node scripts/compile.js" },
+  "devDependencies": { "solc": "0.8.24" }
+}
