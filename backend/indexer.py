@@ -113,6 +113,8 @@ class Indexer:
             return None
         ev = event.process_log(raw)
         name, a = ev["event"], ev["args"]
+        if "id" not in a:  # balance / session events don't change a match
+            return None
 
         if name == "MatchCreated":
             m = s.get(Match, a["id"])
