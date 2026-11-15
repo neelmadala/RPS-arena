@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RPS Arena · Monad</title>
+<style>
+  :root {
+    --bg: #0e0c16; --panel: #181525; --panel2: #211d33; --line: #2e2945;
+    --text: #ece9f7; --muted: #9a93b8; --accent: #836ef9; --accent2: #a594ff;
+    --win: #3ecf8e; --lose: #f2667a; --draw: #f0b54a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 16px 28px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 20px; letter-spacing: .2px; }
+  h1 span { color: var(--accent2); }
+  h2 { margin: 0 0 12px; font-size: 15px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+  main { display: grid; grid-template-columns: 360px 1fr 300px; gap: 20px; padding: 24px 28px; max-width: 1400px; margin: 0 auto; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+  .stack > * + * { margin-top: 20px; }
+  button { font: inherit; cursor: pointer; border: 0; border-radius: 10px; padding: 9px 14px;
+    background: var(--accent); color: white; font-weight: 600; }
+  button:hover { background: var(--accent2); }
+  button.ghost { background: transparent; border: 1px solid var(--line); color: var(--text); font-weight: 500; }
+  button.ghost:hover { border-color: var(--accent); }
+  button.small { padding: 5px 10px; font-size: 13px; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .moves { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+  .move { background: var(--panel2); border: 2px solid transparent; font-size: 34px; padding: 14px 0; border-radius: 12px; color: var(--text); }
+  .move small { display: block; font-size: 12px; color: var(--muted); font-weight: 500; }
+  .move:hover { background: var(--panel2); border-color: var(--line); }
+  .move.sel { border-color: var(--accent); background: #2a2342; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  input { width: 100%; font: inherit; padding: 9px 12px; background: var(--panel2); border: 1px solid var(--line);
+    border-radius: 10px; color: var(--text); margin-bottom: 14px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 9px 6px; border-bottom: 1px solid var(--line); font-size: 14px; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  .muted { color: var(--muted); }
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 600; background: var(--panel2); }
+  .win { color: var(--win); } .lose { color: var(--lose); } .draw { color: var(--draw); }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .empty { color: var(--muted); padding: 14px 0; font-size: 14px; }
+  #toast { position: fixed; bottom: 20px; right: 20px; max-width: 380px; background: var(--panel2); border: 1px solid var(--line);
+    border-radius: 12px; padding: 12px 16px; display: none; box-shadow: 0 10px 30px rgba(0,0,0,.4); }
+  #banner { display: none; background: #3a2333; color: #ffd0d7; padding: 10px 28px; font-size: 14px; }
+  .joinmoves button { font-size: 18px; padding: 3px 8px; background: var(--panel2); }
+  .joinmoves button:hover { background: var(--accent); }
+  .warn { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .live { width: 8px; height: 8px; border-radius: 50%; background: var(--lose); display: inline-block; margin-right: 6px; }
+  .live.on { background: var(--win); }
+</style>
+</head>
+<body>
+<div id="banner"></div>
+<header>
+  <h1>✊✋✌️ RPS Arena <span>on Monad</span></h1>
+  <div class="row">
+    <span class="muted" style="font-size:13px"><span id="live" class="live"></span><span id="liveText">offline</span></span>
+    <span id="credits"></span>
+    <span id="acct" class="mono muted"></span>
+    <button id="connect">Connect wallet</button>
+  </div>
+</header>
+
+<main>
+  <section class="stack">
+    <div class="panel">
+      <h2>New match</h2>
+      <div class="moves" id="createMoves"></div>
+      <label for="stake">Stake (MON) — opponent must match it</label>
+      <input id="stake" type="number" min="0" step="0.001" value="0.01" />
+      <button id="createBtn" style="width:100%">Lock in move &amp; create</button>
+      <p class="warn">Your move stays hidden (only a hash goes on-chain). Your secret is stored in this browser —
+        lose it and you can't reveal, which forfeits the match. <a href="#" id="backup" style="color:var(--accent2)">Back up secrets</a></p>
+    </div>
+    <div class="panel">
+      <h2>Your matches</h2>
+      <div id="mine"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Open matches</h2>
+    <div id="open"></div>
+    <h2 style="margin-top:28px">Recent results</h2>
+    <div id="recent"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Leaderboard</h2>
+    <div id="board"></div>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script type="module">
+import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.min.js";
+
+const MOVES = { 1: ["✊", "rock"], 2: ["✋", "paper"], 3: ["✌️", "scissors"] };
+const MOVE_ID = { rock: 1, paper: 2, scissors: 3 };
+const $ = (id) => document.getElementById(id);
+let cfg, provider, signer, me, contract;
+let selectedMove = 1;
+
+// ---------- helpers ----------
+const short = (a) => (a ? a.slice(0, 6) + "…" + a.slice(-4) : "—");
+const fmt = (wei) => ethers.formatEther(wei).replace(/\.?0+$/, "") || "0";
+const isMe = (a) => me && a && a.toLowerCase() === me.toLowerCase();
+function toast(msg, ms = 4000) {
+  const t = $("toast"); t.innerHTML = msg; t.style.display = "block";
+  clearTimeout(t._h); t._h = setTimeout(() => (t.style.display = "none"), ms);
+}
+async function api(path) { const r = await fetch(path); if (!r.ok) throw new Error(await r.text()); return r.json(); }
+function errMsg(e) { return e?.shortMessage || e?.info?.error?.message || e?.message || String(e); }
+
+// Secrets are keyed by commitment hash, so we can always find the one for a match on-chain.
+const SECRETS_KEY = "rps-secrets";
+const loadSecrets = () => JSON.parse(localStorage.getItem(SECRETS_KEY) || "{}");
+function saveSecret(commitment, data) {
+  const s = loadSecrets(); s[commitment.toLowerCase()] = data; localStorage.setItem(SECRETS_KEY, JSON.stringify(s));
+}
+
+// ---------- wallet ----------
+async function ensureChain() {
+  const hex = "0x" + cfg.chainId.toString(16);
+  try {
+    await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: hex }] });
+  } catch (e) {
+    if (e.code !== 4902) throw e;
+    await window.ethereum.request({ method: "wallet_addEthereumChain", params: [{
+      chainId: hex, chainName: cfg.chainName, rpcUrls: [cfg.rpcUrl],
+      nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
+      blockExplorerUrls: [cfg.explorerUrl],
+    }] });
+  }
+}
+
+async function connect() {
+  if (!window.ethereum) return toast("No wallet found. Install MetaMask, Rabby or another EVM wallet.");
+  await ensureChain();
+  provider = new ethers.BrowserProvider(window.ethereum);
+  signer = await provider.getSigner();
+  me = await signer.getAddress();
+  contract = new ethers.Contract(cfg.contractAddress, cfg.abi, signer);
+  $("connect").textContent = "Connected";
+  $("connect").disabled = true;
+  await refreshAccount();
+  render();
+}
+
+async function refreshAccount() {
+  if (!me) return;
+  const [bal, credit] = await Promise.all([provider.getBalance(me), contract.credits(me)]);
+  $("acct").textContent = `${short(me)} · ${fmt(bal)} MON`;
+  $("credits").innerHTML = credit > 0n
+    ? `<button class="small" id="withdraw">Withdraw ${fmt(credit)} MON</button>` : "";
+  if (credit > 0n) $("withdraw").onclick = () => send(contract.withdraw(), "Withdrawing…");
+}
+
+async function send(txPromise, pending) {
+  try {
+    toast(pending + " (confirm in wallet)", 60000);
+    const tx = await txPromise;
+    toast(pending, 60000);
+    const r = await tx.wait();
+    toast("Confirmed ✓");
+    refreshAccount();
+    return r;
+  } catch (e) { toast("⚠️ " + errMsg(e), 7000); throw e; }
+}
+
+// ---------- actions ----------
+async function createMatch() {
+  if (!contract) await connect();
+  const stake = ethers.parseEther($("stake").value || "0");
+  const salt = ethers.hexlify(ethers.randomBytes(32));
+  const commitment = ethers.solidityPackedKeccak256(
+    ["address", "address", "uint8", "bytes32"], [cfg.contractAddress, me, selectedMove, salt]);
+  // Save BEFORE sending so a closed tab can't lose the secret.
+  saveSecret(commitment, { move: selectedMove, salt, created: Date.now() });
+  await send(contract.createMatch(commitment, { value: stake }), "Creating match…");
+}
+
+async function joinMatch(id, stakeWei, move) {
+  if (!contract) await connect();
+  await send(contract.joinMatch(id, move, { value: BigInt(stakeWei) }), `Joining #${id}…`);
+}
+
+async function reveal(id) {
+  const m = await contract.getMatch(id);
+  const secret = loadSecrets()[m.commitment.toLowerCase()];
+  if (!secret) return toast("No secret for this match in this browser. Import your backup or it will be forfeited.", 8000);
+  await send(contract.reveal(id, secret.move, secret.salt), `Revealing #${id}…`);
+}
+
+const claim = (id) => send(contract.claimTimeout(id), `Claiming #${id}…`);
+const cancel = (id) => send(contract.cancelMatch(id), `Cancelling #${id}…`);
+
+// ---------- rendering ----------
+function resultFor(m) {
+  if (m.status !== "settled") return "";
+  if (m.is_draw) return `<span class="draw">Draw</span>`;
+  const tag = m.forfeit ? " (forfeit)" : "";
+  if (!me) return `<span class="win">${short(m.winner)} won${tag}</span>`;
+  if (isMe(m.creator) || isMe(m.joiner))
+    return isMe(m.winner) ? `<span class="win">You won${tag}</span>` : `<span class="lose">You lost${tag}</span>`;
+  return `<span>${short(m.winner)} won${tag}</span>`;
+}
+const mv = (name) => (name ? MOVES[MOVE_ID[name]][0] : "❔");
+
+function countdown(deadline) {
+  const s = deadline - Math.floor(Date.now() / 1000);
+  return s > 0 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} left` : "expired";
+}
+
+async function renderOpen() {
+  const rows = await api("/api/matches?status=open");
+  $("open").innerHTML = rows.length ? `<table><tr><th>#</th><th>Host</th><th>Stake</th><th></th></tr>${rows.map((m) => `
+    <tr><td>${m.id}</td><td class="mono">${isMe(m.creator) ? "you" : short(m.creator)}</td><td>${fmt(m.stake_wei)} MON</td>
+    <td style="text-align:right">${isMe(m.creator)
+      ? `<button class="small ghost" data-cancel="${m.id}">Cancel</button>`
+      : `<span class="row joinmoves" style="justify-content:flex-end">${[1, 2, 3].map((k) =>
+          `<button data-join="${m.id}" data-stake="${m.stake_wei}" data-move="${k}" title="Join with ${MOVES[k][1]}">${MOVES[k][0]}</button>`).join("")}</span>`}
+    </td></tr>`).join("")}</table>` : `<div class="empty">No open matches. Create one!</div>`;
+}
+
+async function renderRecent() {
+  const rows = await api("/api/matches?status=settled&limit=15");
+  $("recent").innerHTML = rows.length ? `<table><tr><th>#</th><th>Host</th><th></th><th>Challenger</th><th>Stake</th><th>Result</th></tr>${rows.map((m) => `
+    <tr><td>${m.id}</td><td class="mono">${short(m.creator)}</td><td>${mv(m.creator_move)} vs ${mv(m.joiner_move)}</td>
+    <td class="mono">${short(m.joiner)}</td><td>${fmt(m.stake_wei)}</td><td>${resultFor(m)}</td></tr>`).join("")}</table>`
+    : `<div class="empty">No games played yet.</div>`;
+}
+
+async function renderMine() {
+  if (!me) { $("mine").innerHTML = `<div class="empty">Connect a wallet to see your matches.</div>`; return; }
+  const rows = await api(`/api/matches?player=${me}&limit=20`);
+  $("mine").innerHTML = rows.length ? rows.map((m) => {
+    let action = "", state = `<span class="pill">${m.status}</span>`;
+    if (m.status === "joined" && isMe(m.creator)) {
+      action = `<button class="small" data-reveal="${m.id}">Reveal</button>`;
+      state = `<span class="draw">${mv(m.joiner_move)} played · ${countdown(m.reveal_deadline)}</span>`;
+    } else if (m.status === "joined" && isMe(m.joiner)) {
+      const expired = m.reveal_deadline < Date.now() / 1000;
+      action = expired ? `<button class="small" data-claim="${m.id}">Claim win</button>` : "";
+      state = expired ? `<span class="win">Host didn't reveal</span>` : `<span class="muted">Waiting for reveal · ${countdown(m.reveal_deadline)}</span>`;
+    } else if (m.status === "settled") state = resultFor(m);
+    return `<div class="row" style="justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)">
+      <span>#${m.id} · ${fmt(m.stake_wei)} MON</span><span class="row">${state} ${action}</span></div>`;
+  }).join("") : `<div class="empty">You haven't played yet.</div>`;
+}
+
+async function renderBoard() {
+  const rows = await api("/api/leaderboard");
+  $("board").innerHTML = rows.length ? `<table><tr><th>#</th><th>Player</th><th>Elo</th><th>W-L-D</th></tr>${rows.map((p, i) => `
+    <tr><td>${i + 1}</td><td class="mono">${isMe(p.address) ? "<b>you</b>" : short(p.address)}</td><td><b>${p.elo}</b></td>
+    <td class="muted">${p.wins}-${p.losses}-${p.draws}</td></tr>`).join("")}</table>` : `<div class="empty">No ranked players yet.</div>`;
+}
+
+let renderQueued = false;
+function render() {
+  if (renderQueued) return; renderQueued = true;
+  setTimeout(async () => {
+    renderQueued = false;
+    try { await Promise.all([renderOpen(), renderRecent(), renderMine(), renderBoard()]); }
+    catch (e) { console.error(e); }
+  }, 100);
+}
+
+// ---------- live updates ----------
+function connectWs() {
+  const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
+  ws.onopen = () => { $("live").classList.add("on"); $("liveText").textContent = "live"; };
+  ws.onclose = () => { $("live").classList.remove("on"); $("liveText").textContent = "reconnecting"; setTimeout(connectWs, 2000); };
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type !== "match") return;
+    const m = msg.match;
+    if (isMe(m.creator) && m.status === "joined")
+      toast(`Someone joined #${m.id} with ${mv(m.joiner_move)} — <b>reveal now!</b>`, 10000);
+    if ((isMe(m.creator) || isMe(m.joiner)) && m.status === "settled") { toast(`Match #${m.id}: ${resultFor(m)}`, 8000); refreshAccount(); }
+    render();
+  };
+  setInterval(() => ws.readyState === 1 && ws.send("ping"), 25000);
+}
+
+// ---------- wire up ----------
+document.addEventListener("click", (e) => {
+  const d = e.target.closest("button")?.dataset; if (!d) return;
+  if (d.join) joinMatch(Number(d.join), d.stake, Number(d.move));
+  if (d.reveal) reveal(Number(d.reveal));
+  if (d.claim) claim(Number(d.claim));
+  if (d.cancel) cancel(Number(d.cancel));
+});
+$("createMoves").innerHTML = [1, 2, 3].map((k) =>
+  `<button class="move ${k === 1 ? "sel" : ""}" data-pick="${k}">${MOVES[k][0]}<small>${MOVES[k][1]}</small></button>`).join("");
+$("createMoves").onclick = (e) => {
+  const b = e.target.closest("[data-pick]"); if (!b) return;
+  selectedMove = Number(b.dataset.pick);
+  document.querySelectorAll(".move").forEach((x) => x.classList.toggle("sel", x === b));
+};
+$("connect").onclick = () => connect().catch((e) => toast("⚠️ " + errMsg(e)));
+$("createBtn").onclick = () => createMatch().catch(() => {});
+$("backup").onclick = (e) => {
+  e.preventDefault();
+  const blob = new Blob([JSON.stringify(loadSecrets(), null, 2)], { type: "application/json" });
+  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: "rps-secrets.json" });
+  a.click();
+};
+
+cfg = await api("/api/config");
+if (!cfg.contractAddress) {
+  $("banner").style.display = "block";
+  $("banner").textContent = "CONTRACT_ADDRESS is not set on the server. Run `python -m scripts.deploy`, then restart the API.";
+} else {
+  window.ethereum?.on?.("accountsChanged", () => location.reload());
+  window.ethereum?.on?.("chainChanged", () => location.reload());
+  connectWs();
+  render();
+  setInterval(render, 15000); // also refreshes countdowns
+}
+</script>
+</body>
+</html>
