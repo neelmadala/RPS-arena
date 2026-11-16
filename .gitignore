@@ -1,0 +1,7 @@
+.env
+*.db
+bot_secrets.json
+__pycache__/
+.venv/
+node_modules/
+.pytest_cache/

@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#05070d" />
+<title>RPS Arena · Monad</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #05070d; --panel: rgba(12, 18, 33, .72); --panel-solid: #0c1426; --panel2: rgba(255, 255, 255, .035);
+    --line: rgba(148, 178, 255, .10); --line2: rgba(148, 178, 255, .20);
+    --text: #e6edf7; --muted: #7c8aa5; --accent: #22d3ee; --accent2: #a5b4fc;
+    --grad: linear-gradient(135deg, #22d3ee 0%, #3b82f6 100%);
+    --grad-text: linear-gradient(90deg, #22d3ee 0%, #a5b4fc 100%);
+    --win: #34d399; --lose: #fb7185; --draw: #fbbf24;
+    --radius: 16px; --ease: cubic-bezier(.2, .8, .2, 1);
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); overflow-x: hidden;
+    font: 15px/1.5 "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  a { color: var(--accent); }
+
+  /* ---------- ambient background (GPU-cheap: blurred once, then only transformed) ---------- */
+  .bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+  .bg::before { content: ""; position: absolute; inset: 0;
+    background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 44px 44px;
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 20%, transparent 75%);
+            mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 20%, transparent 75%); }
+  .blob { position: absolute; width: 520px; height: 520px; border-radius: 50%; filter: blur(100px); opacity: .22; will-change: transform; }
+  .blob.a { background: #22d3ee; top: -220px; left: -140px; animation: drift 18s ease-in-out infinite alternate; }
+  .blob.b { background: #6366f1; top: 35%; right: -220px; animation: drift 24s ease-in-out infinite alternate-reverse; }
+  @keyframes drift { to { transform: translate(90px, 70px) scale(1.15); } }
+
+  /* ---------- header ---------- */
+  header { position: sticky; top: 0; z-index: 20; border-bottom: 1px solid var(--line);
+    background: rgba(5, 7, 13, .65); -webkit-backdrop-filter: blur(14px) saturate(140%); backdrop-filter: blur(14px) saturate(140%); }
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap;
+    max-width: 1400px; margin: 0 auto; padding: 14px 28px; }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-mark { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 20px;
+    background: var(--grad); box-shadow: 0 8px 24px -8px rgba(34, 211, 238, .7); animation: float 4s ease-in-out infinite; }
+  @keyframes float { 50% { transform: translateY(-3px) rotate(-4deg); } }
+  h1 { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: -.4px; white-space: nowrap; }
+  .grad { background: var(--grad-text); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .chip { display: inline-block; vertical-align: middle; margin-left: 8px; padding: 3px 9px; border-radius: 99px;
+    border: 1px solid var(--line2); font-size: 11px; font-weight: 600; letter-spacing: .8px; text-transform: uppercase; color: var(--accent2); }
+  .status { display: inline-flex; align-items: center; padding: 6px 12px; border-radius: 99px; border: 1px solid var(--line);
+    background: var(--panel2); font-size: 13px; color: var(--muted); }
+  #acct { padding: 6px 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--panel2); }
+  #acct:empty, #credits:empty { display: none; }
+
+  /* ---------- layout ---------- */
+  main { display: grid; grid-template-columns: 340px minmax(0, 1fr) 300px; gap: 20px; align-items: start;
+    max-width: 1400px; margin: 0 auto; padding: 24px 28px 56px; }
+  .stack > * + * { margin-top: 20px; }
+  .panel { position: relative; padding: 20px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--panel);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, .04) inset, 0 24px 48px -28px rgba(0, 0, 0, .7);
+    animation: rise .55s var(--ease) both; animation-delay: calc(var(--d, 0) * 80ms); }
+  .panel::before { content: ""; position: absolute; top: 0; left: 18%; right: 18%; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(34, 211, 238, .55), transparent); }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+  h2 { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 1.4px; color: var(--muted); }
+  h2::before { content: ""; width: 7px; height: 7px; border-radius: 2px; background: var(--grad); transform: rotate(45deg); }
+  .section-gap { margin-top: 30px; }
+
+  /* ---------- buttons ---------- */
+  button { position: relative; overflow: hidden; font: inherit; font-weight: 700; cursor: pointer; border: 0; border-radius: 11px;
+    padding: 10px 16px; background: var(--grad); color: #031018; -webkit-tap-highlight-color: transparent;
+    transition: transform .15s var(--ease), box-shadow .2s, filter .2s, border-color .2s, opacity .2s; }
+  button:hover { filter: brightness(1.08); box-shadow: 0 10px 26px -10px rgba(34, 211, 238, .7); }
+  button:active { transform: scale(.97); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; filter: none; }
+  button.ghost { background: var(--panel2); border: 1px solid var(--line2); color: var(--text); font-weight: 500; }
+  button.ghost:hover { border-color: var(--accent); box-shadow: none; }
+  button.small { padding: 6px 12px; font-size: 13px; border-radius: 9px; }
+  button.connected { background: var(--panel2); color: var(--win); border: 1px solid rgba(52, 211, 153, .35); opacity: 1; }
+  .cta { width: 100%; padding: 13px 16px; font-size: 15px; }
+  .cta::before { content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 40%; transform: skewX(-20deg);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .45), transparent); transition: left .6s var(--ease); }
+  .cta:hover::before { left: 120%; }
+  button.busy { color: transparent; }
+  button.busy::after { content: ""; position: absolute; inset: 0; margin: auto; width: 18px; height: 18px; border-radius: 50%;
+    border: 2px solid rgba(3, 16, 24, .3); border-top-color: #031018; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- move picker ---------- */
+  .moves { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
+  .move { padding: 16px 0 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel2); color: var(--text); font-weight: 500; }
+  .move .emo { display: block; font-size: 38px; line-height: 1.1; transition: transform .25s var(--ease); }
+  .move small { display: block; margin-top: 6px; font-size: 12px; color: var(--muted); text-transform: capitalize; }
+  .move:hover { transform: translateY(-3px); border-color: var(--line2); box-shadow: 0 12px 24px -16px rgba(34, 211, 238, .6); filter: none; }
+  .move:hover .emo { transform: scale(1.12) rotate(-8deg); }
+  .move.sel { border-color: transparent;
+    background: linear-gradient(#0f1a30, #0f1a30) padding-box, var(--grad) border-box;
+    box-shadow: 0 12px 32px -12px rgba(34, 211, 238, .65); }
+  .move.sel small { color: var(--accent); font-weight: 600; }
+  .move.sel .emo { animation: pop .45s var(--ease); }
+  @keyframes pop { 0% { transform: scale(.75); } 55% { transform: scale(1.25) rotate(10deg); } 100% { transform: scale(1); } }
+
+  /* ---------- form ---------- */
+  label { display: block; margin-bottom: 8px; font-size: 13px; color: var(--muted); }
+  .field { position: relative; margin-bottom: 10px; }
+  .field .unit { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-size: 13px; font-weight: 600; color: var(--muted); pointer-events: none; }
+  input { width: 100%; padding: 11px 60px 11px 14px; font: inherit; font-size: 16px; color: var(--text);
+    background: rgba(0, 0, 0, .28); border: 1px solid var(--line2); border-radius: 11px; transition: border-color .2s, box-shadow .2s; }
+  input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(34, 211, 238, .15); }
+  .presets { display: flex; gap: 6px; margin-bottom: 16px; }
+  .presets button { flex: 1; }
+  .warn { margin: 14px 0 0; font-size: 12px; line-height: 1.55; color: var(--muted); }
+
+  /* ---------- tables & rows ---------- */
+  .tbl { overflow-x: auto; margin: 0 -8px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 11px 8px; border-bottom: 1px solid var(--line); text-align: left; font-size: 14px; white-space: nowrap; }
+  th { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+  tr:last-child td { border-bottom: 0; }
+  td { transition: background .2s; }
+  tr:hover td { background: rgba(34, 211, 238, .04); }
+  .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  .muted { color: var(--muted); }
+  .id { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .stake { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .vs { font-size: 18px; }
+  .vs i { margin: 0 4px; font-size: 11px; font-style: normal; font-weight: 600; color: var(--muted); }
+  .win, .lose, .draw { font-weight: 600; }
+  .win { color: var(--win); } .lose { color: var(--lose); } .draw { color: var(--draw); }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .joinmoves { justify-content: flex-end; flex-wrap: nowrap; gap: 6px; }
+  .joinmoves button { width: 38px; height: 38px; padding: 0; font-size: 18px; border-radius: 50%;
+    background: var(--panel2); border: 1px solid var(--line2); }
+  .joinmoves button:hover { transform: scale(1.12); border-color: var(--accent); background: rgba(34, 211, 238, .12);
+    box-shadow: 0 0 18px -4px rgba(34, 211, 238, .7); filter: none; }
+
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 600;
+    text-transform: capitalize; background: var(--panel2); color: var(--muted); }
+  .pill.open { color: var(--accent); background: rgba(34, 211, 238, .1); }
+  .pill.joined { color: var(--draw); background: rgba(251, 191, 36, .1); }
+  .pill.cancelled { color: var(--lose); background: rgba(251, 113, 133, .08); }
+
+  .mrow { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 11px 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel2); transition: border-color .2s; }
+  .mrow:hover { border-color: var(--line2); }
+  .mrow + .mrow { margin-top: 8px; }
+  .mrow.hot { border-color: rgba(251, 191, 36, .45); box-shadow: 0 0 0 1px rgba(251, 191, 36, .15), 0 8px 24px -14px rgba(251, 191, 36, .6); }
+
+  .rank { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 8px;
+    font-size: 12px; font-weight: 700; background: var(--panel2); color: var(--muted); }
+  .rank.r1 { background: linear-gradient(135deg, #fde68a, #f59e0b); color: #3a2500; }
+  .rank.r2 { background: linear-gradient(135deg, #f1f5f9, #94a3b8); color: #1e293b; }
+  .rank.r3 { background: linear-gradient(135deg, #fdba74, #c2410c); color: #2c0f00; }
+  .you { color: var(--accent); font-weight: 700; }
+  .elo { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .empty { padding: 22px 8px; text-align: center; font-size: 14px; color: var(--muted); }
+  .empty span { display: block; margin-bottom: 6px; font-size: 26px; opacity: .7; }
+
+  /* rows animate in only when they're new, not on every refresh */
+  .enter { animation: rowIn .45s var(--ease) both; }
+  @keyframes rowIn { from { opacity: 0; transform: translateY(8px); } }
+
+  .skel { height: 14px; margin: 14px 0; border-radius: 7px; background-size: 200% 100%; animation: shimmer 1.2s linear infinite;
+    background-image: linear-gradient(90deg, rgba(255, 255, 255, .04) 25%, rgba(255, 255, 255, .09) 50%, rgba(255, 255, 255, .04) 75%); }
+  .skel:nth-child(2) { width: 85%; } .skel:nth-child(3) { width: 65%; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+
+  /* ---------- live dot, toast, banner ---------- */
+  .live { position: relative; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--lose); }
+  .live.on { background: var(--win); }
+  .live.on::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--win); animation: ping 1.8s var(--ease) infinite; }
+  @keyframes ping { to { transform: scale(2.8); opacity: 0; } }
+
+  #toast { position: fixed; right: 20px; bottom: 20px; z-index: 50; max-width: 380px; padding: 13px 16px;
+    border: 1px solid var(--line2); border-left: 3px solid var(--accent); border-radius: 12px;
+    background: rgba(12, 18, 33, .94); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    box-shadow: 0 18px 40px -12px rgba(0, 0, 0, .7);
+    opacity: 0; transform: translateY(16px) scale(.98); pointer-events: none; transition: opacity .25s, transform .35s var(--ease); }
+  #toast.show { opacity: 1; transform: none; pointer-events: auto; }
+  #toast.err { border-left-color: var(--lose); }
+  #toast.ok { border-left-color: var(--win); }
+  #banner { display: none; padding: 11px 28px; font-size: 14px; color: #ffe4e8;
+    background: linear-gradient(90deg, rgba(251, 113, 133, .25), rgba(251, 191, 36, .15)); border-bottom: 1px solid rgba(251, 113, 133, .3); }
+  [hidden] { display: none !important; } /* .row's display:flex would otherwise beat the hidden attribute */
+
+  /* ---------- quick play (session key) ---------- */
+  #sessionPanel::before { background: linear-gradient(90deg, transparent, rgba(251, 191, 36, .6), transparent); }
+  #sessionPanel input, #sessionPanel select { margin-bottom: 14px; }
+  #sessionPanel input { padding-right: 14px; }
+  .bolt { color: var(--draw); }
+  #sessionPanel h2::before { display: none; }
+  h2 .bolt { font-size: 14px; }
+  .sess-intro { margin: 0 0 16px; font-size: 14px; color: var(--muted); }
+  .sess-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+  .sess-stats { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; margin-bottom: 16px; padding: 12px 14px;
+    border: 1px solid var(--line); border-radius: 12px; background: var(--panel2); font-size: 14px; }
+  .sess-stats b { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+  .sess-actions { gap: 6px; }
+  .sess-bal { justify-content: space-between; margin-top: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel2); }
+  select { width: 100%; padding: 11px 38px 11px 14px; font: inherit; font-size: 16px; color: var(--text); cursor: pointer;
+    background: rgba(0, 0, 0, .28) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='%237c8aa5' stroke-width='2'%3E%3Cpath d='M1 1l5 5 5-5'/%3E%3C/svg%3E") no-repeat right 14px center;
+    border: 1px solid var(--line2); border-radius: 11px; -webkit-appearance: none; appearance: none; transition: border-color .2s, box-shadow .2s; }
+  select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(34, 211, 238, .15); }
+  select option { background: var(--panel-solid); }
+
+  /* ---------- responsive ---------- */
+  /* Drop secondary columns whenever the panel itself is narrow, at any screen size. */
+  .panel { container-type: inline-size; }
+  @container (max-width: 560px) { .hide-sm { display: none; } }
+  @media (max-width: 1180px) {
+    main { grid-template-columns: 320px minmax(0, 1fr); }
+    #boardPanel { grid-column: 1 / -1; }
+  }
+  @media (max-width: 780px) {
+    main { grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 16px 16px 40px; }
+    .stack > * + * { margin-top: 16px; }
+    .bar { padding: 12px 16px; }
+    #banner { padding: 10px 16px; }
+    .panel { padding: 16px; }
+    #toast { left: 16px; right: 16px; bottom: 16px; max-width: none; }
+  }
+  @media (max-width: 440px) {
+    .chip { display: none; }
+    h1 { font-size: 19px; }
+    .logo-mark { width: 36px; height: 36px; font-size: 18px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  }
+</style>
+</head>
+<body>
+<div class="bg" aria-hidden="true"><div class="blob a"></div><div class="blob b"></div></div>
+<div id="banner"></div>
+<header>
+  <div class="bar">
+    <div class="logo">
+      <div class="logo-mark" aria-hidden="true">✊</div>
+      <h1><span class="grad">RPS Arena</span><span class="chip">on Monad</span></h1>
+    </div>
+    <div class="row">
+      <span class="status"><span id="live" class="live"></span><span id="liveText">offline</span></span>
+      <span id="credits"></span>
+      <span id="acct" class="mono muted"></span>
+      <button id="connect">Connect wallet</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="stack">
+    <div class="panel" id="sessionPanel" style="--d:0">
+      <h2><span class="bolt">⚡</span> Quick play</h2>
+      <div id="sessOff">
+        <p class="sess-intro">Approve once, then play with no wallet popups.
+          A temporary key in this browser plays for you from a game balance, and reveals your moves automatically.</p>
+        <div class="sess-grid">
+          <div><label for="sessDeposit">Game balance (MON)</label><input id="sessDeposit" type="number" min="0" step="0.01" value="1" /></div>
+          <div><label for="sessGas">Gas for key (MON)</label><input id="sessGas" type="number" min="0.04" step="0.01" value="0.3" /></div>
+        </div>
+        <label for="sessHours">Session length</label>
+        <select id="sessHours"><option value="1">1 hour</option><option value="4" selected>4 hours</option><option value="24">24 hours</option></select>
+        <button id="sessStart" class="cta">⚡ Start session (1 approval)</button>
+        <p class="warn">The key can only stake from your game balance, and only until it expires. It can never withdraw:
+          only your wallet can. The gas MON goes to the key and is sent back to you when you end the session.</p>
+        <div id="sessOffBal" hidden class="row sess-bal">
+          <span>Game balance: <b id="sessOffBalAmt"></b></span>
+          <button class="small ghost" id="sessOffWithdraw">Withdraw</button>
+        </div>
+      </div>
+      <div id="sessOn" hidden>
+        <div class="sess-stats">
+          <span class="muted">Game balance</span><b id="sessBal">—</b>
+          <span class="muted">Key gas</span><b id="sessKeyGas">—</b>
+          <span class="muted">Expires</span><b id="sessExp">—</b>
+        </div>
+        <label for="sessTopupAmt">Add to game balance (MON)</label>
+        <input id="sessTopupAmt" type="number" min="0" step="0.01" value="1" />
+        <div class="row sess-actions">
+          <button class="small" id="sessTopup">Add funds</button>
+          <button class="small ghost" id="sessAddGas">Add 0.2 gas</button>
+          <button class="small ghost" id="sessWithdraw">Withdraw balance</button>
+          <button class="small ghost" id="sessEnd">End session</button>
+        </div>
+        <p class="warn" id="sessWarn"></p>
+      </div>
+    </div>
+    <div class="panel" style="--d:1">
+      <h2>New match</h2>
+      <div class="moves" id="createMoves"></div>
+      <label for="stake">Stake: your opponent must match it</label>
+      <div class="field">
+        <input id="stake" type="number" min="0" step="0.001" value="0.01" inputmode="decimal" />
+        <span class="unit">MON</span>
+      </div>
+      <div class="presets" id="presets">
+        <button class="small ghost" data-preset="0.01">0.01</button>
+        <button class="small ghost" data-preset="0.05">0.05</button>
+        <button class="small ghost" data-preset="0.1">0.1</button>
+        <button class="small ghost" data-preset="0.5">0.5</button>
+      </div>
+      <button id="createBtn" class="cta">Lock in move &amp; create</button>
+      <p class="warn">Your move stays hidden: only a hash goes on-chain. Your secret is stored in this browser.
+        If you lose it you can't reveal, and you forfeit the match. <a href="#" id="backup">Back up secrets</a></p>
+    </div>
+    <div class="panel" style="--d:2">
+      <h2>Your matches</h2>
+      <div id="mine"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+    </div>
+  </section>
+
+  <section class="panel" style="--d:3">
+    <h2>Open matches</h2>
+    <div id="open"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+    <h2 class="section-gap">Recent results</h2>
+    <div id="recent"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+  </section>
+
+  <section class="panel" id="boardPanel" style="--d:4">
+    <h2>Leaderboard</h2>
+    <div id="board"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+  </section>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script type="module">
+import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.min.js";
+
+const MOVES = { 1: ["✊", "rock"], 2: ["✋", "paper"], 3: ["✌️", "scissors"] };
+const MOVE_ID = { rock: 1, paper: 2, scissors: 3 };
+const $ = (id) => document.getElementById(id);
+let cfg, provider, signer, me, contract;
+let selectedMove = 1;
+// Session key: a wallet that lives in this browser and signs for the player without popups.
+let rpc, sessWallet, sessContract;
+let sess = null; // { key, expiry, allowance, credits, keyGas, mine, live }
+const autoRevealing = new Set();
+// Monad checks the worst-case fee (gas limit × max fee) up front: up to ~0.036 MON for createMatch.
+const MIN_KEY_GAS = ethers.parseEther("0.04");
+const ADD_GAS = ethers.parseEther("0.2");
+const MAX_UINT = 2n ** 256n - 1n;
+
+// ---------- helpers ----------
+const short = (a) => (a ? a.slice(0, 6) + "…" + a.slice(-4) : "—");
+const fmt = (wei) => ethers.formatEther(wei).replace(/\.?0+$/, "") || "0";
+const isMe = (a) => me && a && a.toLowerCase() === me.toLowerCase();
+function toast(msg, ms = 4000) {
+  const t = $("toast"); t.innerHTML = msg;
+  t.className = "show" + (msg.startsWith("⚠️") ? " err" : msg.trim().endsWith("✓") ? " ok" : "");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), ms);
+}
+async function api(path) { const r = await fetch(path); if (!r.ok) throw new Error(await r.text()); return r.json(); }
+function errMsg(e) { return e?.shortMessage || e?.info?.error?.message || e?.message || String(e); }
+const empty = (icon, text) => `<div class="empty" data-k="empty"><span>${icon}</span>${text}</div>`;
+
+// Animate only rows whose key wasn't there on the previous render, so refreshes don't flicker.
+const seen = {};
+function animateRows(id) {
+  const prev = seen[id], next = new Set(); let i = 0;
+  $(id).querySelectorAll("[data-k]").forEach((el) => {
+    const k = el.dataset.k; next.add(k);
+    if (!prev || !prev.has(k)) { el.classList.add("enter"); el.style.animationDelay = `${Math.min(i++, 10) * 40}ms`; }
+  });
+  seen[id] = next;
+}
+
+// Secrets are keyed by commitment hash, so we can always find the one for a match on-chain.
+const SECRETS_KEY = "rps-secrets";
+const loadSecrets = () => JSON.parse(localStorage.getItem(SECRETS_KEY) || "{}");
+function saveSecret(commitment, data) {
+  const s = loadSecrets(); s[commitment.toLowerCase()] = data; localStorage.setItem(SECRETS_KEY, JSON.stringify(s));
+}
+
+// ---------- wallet ----------
+async function ensureChain() {
+  const hex = "0x" + cfg.chainId.toString(16);
+  try {
+    await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: hex }] });
+  } catch (e) {
+    if (e.code !== 4902) throw e;
+    await window.ethereum.request({ method: "wallet_addEthereumChain", params: [{
+      chainId: hex, chainName: cfg.chainName, rpcUrls: [cfg.rpcUrl],
+      nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
+      blockExplorerUrls: [cfg.explorerUrl],
+    }] });
+  }
+}
+
+async function connect() {
+  if (!window.ethereum) return toast("No wallet found. Install MetaMask, Rabby or another EVM wallet.");
+  await ensureChain();
+  provider = new ethers.BrowserProvider(window.ethereum);
+  signer = await provider.getSigner();
+  me = await signer.getAddress();
+  contract = new ethers.Contract(cfg.contractAddress, cfg.abi, signer);
+  $("connect").textContent = "● Connected";
+  $("connect").classList.add("connected");
+  $("connect").disabled = true;
+  await refreshAccount();
+  render();
+}
+
+async function refreshAccount() {
+  if (!me) return;
+  const [bal, credit] = await Promise.all([provider.getBalance(me), contract.credits(me)]);
+  $("acct").textContent = `${short(me)} · ${fmt(bal)} MON`;
+  await refreshSession(credit);
+}
+
+async function send(txPromise, pending) {
+  try {
+    toast(pending + " (confirm in wallet)", 60000);
+    const tx = await txPromise;
+    toast(pending, 60000);
+    const r = await tx.wait();
+    toast("Confirmed ✓");
+    refreshAccount();
+    return r;
+  } catch (e) { toast("⚠️ " + errMsg(e), 7000); throw e; }
+}
+
+// ---------- session key ----------
+// The private key is stored per contract + player, so a new deploy or another account never reuses it.
+const sessStoreKey = () => `rps-session:${cfg.contractAddress.toLowerCase()}:${me.toLowerCase()}`;
+const loadKey = () => { try { return JSON.parse(localStorage.getItem(sessStoreKey()) || "null"); } catch { return null; } };
+const saveKey = (pk) => localStorage.setItem(sessStoreKey(), JSON.stringify({ pk, saved: Date.now() }));
+const dropKey = () => localStorage.removeItem(sessStoreKey());
+
+function useKey(pk) {
+  sessWallet = pk ? new ethers.Wallet(pk, rpc) : null;
+  sessContract = sessWallet ? new ethers.Contract(cfg.contractAddress, cfg.abi, sessWallet) : null;
+}
+
+async function refreshSession(credit) {
+  const stored = loadKey();
+  if (stored && (!sessWallet || sessWallet.privateKey !== stored.pk)) useKey(stored.pk);
+  const [key, expiry, allowance] = await contract.sessions(me);
+  const mine = !!sessWallet && key.toLowerCase() === sessWallet.address.toLowerCase();
+  const keyGas = sessWallet ? await rpc.getBalance(sessWallet.address) : 0n;
+  sess = { key, expiry: Number(expiry), allowance, credits: credit, keyGas, mine,
+           live: mine && Number(expiry) > Date.now() / 1000 };
+  renderSession();
+}
+
+function renderSession() {
+  const s = sess, on = !!s?.mine;
+  $("sessOff").hidden = on; $("sessOn").hidden = !on;
+  $("sessOffBal").hidden = on || !s || s.credits === 0n;
+  if (!s) return;
+  $("sessOffBalAmt").textContent = `${fmt(s.credits)} MON`;
+  if (!on) return;
+  $("sessBal").textContent = `${fmt(s.credits)} MON`;
+  $("sessKeyGas").textContent = `${fmt(s.keyGas)} MON`;
+  const left = s.expiry - Math.floor(Date.now() / 1000);
+  $("sessExp").innerHTML = left > 0 ? `in ${Math.floor(left / 3600)}h ${Math.floor((left % 3600) / 60)}m`
+                                    : `<span class="lose">expired</span>`;
+  const warn = [];
+  if (!s.live) warn.push("Session expired: new games use your wallet again. Your key can still reveal and claim open games.");
+  if (s.keyGas < MIN_KEY_GAS) warn.push("Key is low on gas, so actions fall back to wallet popups. Click “Add 0.2 gas”.");
+  if (s.live && s.credits === 0n) warn.push("Game balance is empty, so new games use your wallet. Click “Add funds”.");
+  $("sessWarn").textContent = warn.join(" ");
+}
+
+// Session-key transactions go one at a time so their nonces never collide.
+let keyQueue = Promise.resolve();
+function sendKey(fn, pending) {
+  const run = async () => {
+    try {
+      toast("⚡ " + pending, 60000);
+      // Monad validates against state a few blocks old, so a key funded moments ago can briefly
+      // look empty ("insufficient balance"). Wait and retry instead of failing.
+      let tx;
+      for (let i = 0; ; i++) {
+        try { tx = await fn(); break; }
+        catch (e) {
+          if (i >= 5 || !/insufficient (balance|funds)/i.test(errMsg(e))) throw e;
+          await new Promise((res) => setTimeout(res, 1500));
+        }
+      }
+      const r = await tx.wait();
+      toast("⚡ Confirmed ✓");
+      refreshAccount();
+      return r;
+    } catch (e) { toast("⚠️ " + errMsg(e), 7000); throw e; }
+  };
+  const p = keyQueue.then(run, run);
+  keyQueue = p.catch(() => {});
+  return p;
+}
+
+const keyHasGas = () => sess?.mine && sess.keyGas >= MIN_KEY_GAS;
+const keyCanSpend = (stake) => keyHasGas() && sess.live && sess.credits >= stake && sess.allowance >= stake;
+
+/// Send a key's leftover gas back to the player's wallet (no popup: the key signs it).
+async function sweepKey(wallet) {
+  const bal = await rpc.getBalance(wallet.address);
+  const price = ((await rpc.getFeeData()).gasPrice * 12n) / 10n;
+  const cost = 21000n * price;
+  if (bal <= cost) return;
+  const tx = await wallet.sendTransaction({ to: me, value: bal - cost, gasLimit: 21000n, gasPrice: price, type: 0 });
+  await tx.wait();
+}
+
+async function startSession() {
+  if (!contract) await connect();
+  const deposit = ethers.parseEther($("sessDeposit").value || "0");
+  const gas = ethers.parseEther($("sessGas").value || "0");
+  const hours = Number($("sessHours").value);
+  if (gas < MIN_KEY_GAS) return toast(`Give the key at least ${fmt(MIN_KEY_GAS)} MON of gas.`);
+  // Recover gas from an older key in this browser before replacing it.
+  if (sessWallet) await sweepKey(sessWallet).catch(() => {});
+  const key = ethers.Wallet.createRandom();
+  saveKey(key.privateKey); // save BEFORE sending, like move secrets
+  useKey(key.privateKey);
+  // The key may stake anything in the game balance; the balance itself is the limit.
+  await send(contract.startSession(key.address, hours * 3600, MAX_UINT, gas, { value: deposit + gas }),
+             "Starting session…");
+}
+
+async function endSession() {
+  if (keyHasGas()) {
+    await sendKey(() => sessContract.endSession(), "Ending session…");
+  } else {
+    await send(contract.endSession(), "Ending session…");
+  }
+  try { await sweepKey(sessWallet); toast("Session ended. Leftover gas sent back to your wallet ✓"); } catch (e) { console.warn(e); }
+  dropKey(); useKey(null); refreshAccount();
+}
+
+const topUp = () => send(contract.deposit({ value: ethers.parseEther($("sessTopupAmt").value || "0") }), "Adding funds…");
+const addGas = () => send(signer.sendTransaction({ to: sessWallet.address, value: ADD_GAS }), "Sending gas to key…");
+const withdrawBalance = () => send(contract.withdraw(), "Withdrawing…");
+
+// ---------- actions ----------
+async function createMatch() {
+  if (!contract) await connect();
+  const stake = ethers.parseEther($("stake").value || "0");
+  const salt = ethers.hexlify(ethers.randomBytes(32));
+  // The commitment is always for the player's address, even when the key sends it.
+  const commitment = ethers.solidityPackedKeccak256(
+    ["address", "address", "uint8", "bytes32"], [cfg.contractAddress, me, selectedMove, salt]);
+  // Save BEFORE sending so a closed tab can't lose the secret.
+  saveSecret(commitment, { move: selectedMove, salt, created: Date.now() });
+  if (keyCanSpend(stake))
+    return sendKey(() => sessContract.createMatchFromBalance(commitment, stake), "Creating match…");
+  await send(contract.createMatch(commitment, { value: stake }), "Creating match…");
+}
+
+async function joinMatch(id, stakeWei, move) {
+  if (!contract) await connect();
+  if (keyCanSpend(BigInt(stakeWei)))
+    return sendKey(() => sessContract.joinMatchFromBalance(id, move), `Joining #${id}…`);
+  await send(contract.joinMatch(id, move, { value: BigInt(stakeWei) }), `Joining #${id}…`);
+}
+
+async function reveal(id) {
+  const m = await contract.getMatch(id);
+  const secret = loadSecrets()[m.commitment.toLowerCase()];
+  if (!secret) return toast("No secret for this match in this browser. Import your backup or it will be forfeited.", 8000);
+  if (keyHasGas()) return sendKey(() => sessContract.reveal(id, secret.move, secret.salt), `Revealing #${id}…`);
+  await send(contract.reveal(id, secret.move, secret.salt), `Revealing #${id}…`);
+}
+
+const claim = (id) => keyHasGas()
+  ? sendKey(() => sessContract.claimTimeout(id), `Claiming #${id}…`)
+  : send(contract.claimTimeout(id), `Claiming #${id}…`);
+const cancel = (id) => keyHasGas()
+  ? sendKey(() => sessContract.cancelMatch(id), `Cancelling #${id}…`)
+  : send(contract.cancelMatch(id), `Cancelling #${id}…`);
+
+/// With a session, reveal as soon as someone joins one of our matches. No click, no popup.
+function maybeAutoReveal(m) {
+  if (!keyHasGas() || m.status !== "joined" || !isMe(m.creator) || autoRevealing.has(m.id)) return;
+  if (m.reveal_deadline && m.reveal_deadline < Date.now() / 1000) return;
+  autoRevealing.add(m.id);
+  reveal(m.id).catch(() => setTimeout(() => autoRevealing.delete(m.id), 10000)); // retry later on failure
+}
+
+// ---------- rendering ----------
+function resultFor(m) {
+  if (m.status !== "settled") return "";
+  if (m.is_draw) return `<span class="draw">Draw</span>`;
+  const tag = m.forfeit ? " (forfeit)" : "";
+  if (!me) return `<span class="win">${short(m.winner)} won${tag}</span>`;
+  if (isMe(m.creator) || isMe(m.joiner))
+    return isMe(m.winner) ? `<span class="win">You won${tag}</span>` : `<span class="lose">You lost${tag}</span>`;
+  return `<span>${short(m.winner)} won${tag}</span>`;
+}
+const mv = (name) => (name ? MOVES[MOVE_ID[name]][0] : "❔");
+
+function countdown(deadline) {
+  const s = deadline - Math.floor(Date.now() / 1000);
+  return s > 0 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} left` : "expired";
+}
+
+async function renderOpen() {
+  const rows = await api("/api/matches?status=open");
+  $("open").innerHTML = rows.length ? `<div class="tbl"><table><tr><th>#</th><th>Host</th><th>Stake</th><th></th></tr>${rows.map((m) => `
+    <tr data-k="${m.id}"><td class="id">${m.id}</td><td class="mono">${isMe(m.creator) ? `<span class="you">you</span>` : short(m.creator)}</td>
+    <td class="stake">${fmt(m.stake_wei)} MON</td>
+    <td style="text-align:right">${isMe(m.creator)
+      ? `<button class="small ghost" data-cancel="${m.id}">Cancel</button>`
+      : `<span class="row joinmoves">${[1, 2, 3].map((k) =>
+          `<button data-join="${m.id}" data-stake="${m.stake_wei}" data-move="${k}" title="Join with ${MOVES[k][1]}" aria-label="Join with ${MOVES[k][1]}">${MOVES[k][0]}</button>`).join("")}</span>`}
+    </td></tr>`).join("")}</table></div>` : empty("🎯", "No open matches. Create one!");
+  animateRows("open");
+}
+
+async function renderRecent() {
+  const rows = await api("/api/matches?status=settled&limit=15");
+  $("recent").innerHTML = rows.length ? `<div class="tbl"><table><tr><th>#</th><th class="hide-sm">Host</th><th>Moves</th><th class="hide-sm">Challenger</th><th>Stake</th><th>Result</th></tr>${rows.map((m) => `
+    <tr data-k="${m.id}"><td class="id">${m.id}</td><td class="mono hide-sm">${short(m.creator)}</td>
+    <td class="vs">${mv(m.creator_move)}<i>vs</i>${mv(m.joiner_move)}</td>
+    <td class="mono hide-sm">${short(m.joiner)}</td><td class="stake">${fmt(m.stake_wei)}</td><td>${resultFor(m)}</td></tr>`).join("")}</table></div>`
+    : empty("🕹️", "No games played yet.");
+  animateRows("recent");
+}
+
+async function renderMine() {
+  if (!me) { $("mine").innerHTML = empty("🔌", "Connect a wallet to see your matches."); animateRows("mine"); return; }
+  const rows = await api(`/api/matches?player=${me}&limit=20`);
+  $("mine").innerHTML = rows.length ? rows.map((m) => {
+    let action = "", hot = false, state = `<span class="pill ${m.status}">${m.status}</span>`;
+    if (m.status === "joined" && isMe(m.creator)) {
+      maybeAutoReveal(m);
+      const auto = autoRevealing.has(m.id);
+      hot = !auto; // only highlight when the player has to act
+      action = auto
+        ? `<span class="bolt" title="Your session key is revealing this automatically">⚡ revealing…</span>`
+        : `<button class="small" data-reveal="${m.id}">Reveal</button>`;
+      state = `<span class="draw">${mv(m.joiner_move)} played · ${countdown(m.reveal_deadline)}</span>`;
+    } else if (m.status === "joined" && isMe(m.joiner)) {
+      const expired = m.reveal_deadline < Date.now() / 1000;
+      hot = expired;
+      action = expired ? `<button class="small" data-claim="${m.id}">Claim win</button>` : "";
+      state = expired ? `<span class="win">Host didn't reveal</span>` : `<span class="muted">Waiting for reveal · ${countdown(m.reveal_deadline)}</span>`;
+    } else if (m.status === "settled") state = resultFor(m);
+    return `<div class="mrow${hot ? " hot" : ""}" data-k="${m.id}-${m.status}">
+      <span><span class="id">#${m.id}</span> · <span class="stake">${fmt(m.stake_wei)} MON</span></span><span class="row">${state} ${action}</span></div>`;
+  }).join("") : empty("✨", "You haven't played yet.");
+  animateRows("mine");
+}
+
+async function renderBoard() {
+  const rows = await api("/api/leaderboard");
+  $("board").innerHTML = rows.length ? `<div class="tbl"><table><tr><th>#</th><th>Player</th><th>Elo</th><th>W-L-D</th></tr>${rows.map((p, i) => `
+    <tr data-k="${p.address}"><td><span class="rank ${i < 3 ? "r" + (i + 1) : ""}">${i + 1}</span></td>
+    <td class="mono">${isMe(p.address) ? `<span class="you">you</span>` : short(p.address)}</td><td class="elo">${p.elo}</td>
+    <td class="muted">${p.wins}-${p.losses}-${p.draws}</td></tr>`).join("")}</table></div>` : empty("🏆", "No ranked players yet.");
+  animateRows("board");
+}
+
+let renderQueued = false;
+function render() {
+  if (renderQueued) return; renderQueued = true;
+  setTimeout(async () => {
+    renderQueued = false;
+    try { await Promise.all([renderOpen(), renderRecent(), renderMine(), renderBoard()]); }
+    catch (e) { console.error(e); }
+  }, 100);
+}
+
+// ---------- live updates ----------
+function connectWs() {
+  const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws");
+  ws.onopen = () => { $("live").classList.add("on"); $("liveText").textContent = "live"; };
+  ws.onclose = () => { $("live").classList.remove("on"); $("liveText").textContent = "reconnecting"; setTimeout(connectWs, 2000); };
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type !== "match") return;
+    const m = msg.match;
+    if (isMe(m.creator) && m.status === "joined") {
+      if (keyHasGas()) { toast(`Someone joined #${m.id} with ${mv(m.joiner_move)}. ⚡ Revealing automatically…`, 6000); maybeAutoReveal(m); }
+      else toast(`Someone joined #${m.id} with ${mv(m.joiner_move)}. <b>Reveal now!</b>`, 10000);
+    }
+    if ((isMe(m.creator) || isMe(m.joiner)) && m.status === "settled") { toast(`Match #${m.id}: ${resultFor(m)}`, 8000); refreshAccount(); }
+    render();
+  };
+  setInterval(() => ws.readyState === 1 && ws.send("ping"), 25000);
+}
+
+// ---------- wire up ----------
+document.addEventListener("click", (e) => {
+  const d = e.target.closest("button")?.dataset; if (!d) return;
+  if (d.join) joinMatch(Number(d.join), d.stake, Number(d.move));
+  if (d.reveal) reveal(Number(d.reveal));
+  if (d.claim) claim(Number(d.claim));
+  if (d.cancel) cancel(Number(d.cancel));
+});
+$("createMoves").innerHTML = [1, 2, 3].map((k) =>
+  `<button class="move ${k === 1 ? "sel" : ""}" data-pick="${k}" aria-label="${MOVES[k][1]}"><span class="emo">${MOVES[k][0]}</span><small>${MOVES[k][1]}</small></button>`).join("");
+$("createMoves").onclick = (e) => {
+  const b = e.target.closest("[data-pick]"); if (!b) return;
+  selectedMove = Number(b.dataset.pick);
+  document.querySelectorAll(".move").forEach((x) => x.classList.toggle("sel", x === b));
+};
+$("presets").onclick = (e) => {
+  const b = e.target.closest("[data-preset]"); if (b) $("stake").value = b.dataset.preset;
+};
+$("connect").onclick = () => connect().catch((e) => toast("⚠️ " + errMsg(e)));
+$("createBtn").onclick = async () => {
+  const b = $("createBtn"); b.classList.add("busy"); b.disabled = true;
+  try { await createMatch(); } catch {} finally { b.classList.remove("busy"); b.disabled = false; }
+};
+const guard = (fn) => () => fn().catch((e) => { console.error(e); });
+$("sessStart").onclick = guard(startSession);
+$("sessEnd").onclick = guard(endSession);
+$("sessTopup").onclick = guard(topUp);
+$("sessAddGas").onclick = guard(addGas);
+$("sessWithdraw").onclick = guard(withdrawBalance);
+$("sessOffWithdraw").onclick = guard(withdrawBalance);
+$("backup").onclick = (e) => {
+  e.preventDefault();
+  const blob = new Blob([JSON.stringify(loadSecrets(), null, 2)], { type: "application/json" });
+  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: "rps-secrets.json" });
+  a.click();
+};
+
+cfg = await api("/api/config");
+if (!cfg.contractAddress) {
+  $("banner").style.display = "block";
+  $("banner").textContent = "CONTRACT_ADDRESS is not set on the server. Run `python -m scripts.deploy`, then restart the API.";
+  for (const id of ["open", "recent", "mine", "board"]) $(id).innerHTML = empty("⛓️", "No contract deployed yet.");
+} else {
+  // Read-only connection straight to Monad, used by the session key (no wallet involved).
+  rpc = new ethers.JsonRpcProvider(cfg.rpcUrl, cfg.chainId, { staticNetwork: true });
+  window.ethereum?.on?.("accountsChanged", () => location.reload());
+  window.ethereum?.on?.("chainChanged", () => location.reload());
+  connectWs();
+  render();
+  setInterval(render, 15000); // also refreshes countdowns
+  setInterval(() => me && refreshAccount().catch(() => {}), 20000); // balances, key gas, expiry
+  // Reconnect silently if the wallet already authorized this site, so a session resumes on reload.
+  window.ethereum?.request?.({ method: "eth_accounts" })
+    .then((a) => a?.length && connect()).catch(() => {});
+}
+</script>
+</body>
+</html>
