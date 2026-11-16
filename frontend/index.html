@@ -3,101 +3,274 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#05070d" />
 <title>RPS Arena · Monad</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --bg: #0e0c16; --panel: #181525; --panel2: #211d33; --line: #2e2945;
-    --text: #ece9f7; --muted: #9a93b8; --accent: #836ef9; --accent2: #a594ff;
-    --win: #3ecf8e; --lose: #f2667a; --draw: #f0b54a;
+    --bg: #05070d; --panel: rgba(12, 18, 33, .72); --panel-solid: #0c1426; --panel2: rgba(255, 255, 255, .035);
+    --line: rgba(148, 178, 255, .10); --line2: rgba(148, 178, 255, .20);
+    --text: #e6edf7; --muted: #7c8aa5; --accent: #22d3ee; --accent2: #a5b4fc;
+    --grad: linear-gradient(135deg, #22d3ee 0%, #3b82f6 100%);
+    --grad-text: linear-gradient(90deg, #22d3ee 0%, #a5b4fc 100%);
+    --win: #34d399; --lose: #fb7185; --draw: #fbbf24;
+    --radius: 16px; --ease: cubic-bezier(.2, .8, .2, 1);
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text);
-    font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
-  header { display: flex; align-items: center; justify-content: space-between; gap: 16px;
-    padding: 16px 28px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-  h1 { margin: 0; font-size: 20px; letter-spacing: .2px; }
-  h1 span { color: var(--accent2); }
-  h2 { margin: 0 0 12px; font-size: 15px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
-  main { display: grid; grid-template-columns: 360px 1fr 300px; gap: 20px; padding: 24px 28px; max-width: 1400px; margin: 0 auto; }
-  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
-  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); overflow-x: hidden;
+    font: 15px/1.5 "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  a { color: var(--accent); }
+
+  /* ---------- ambient background (GPU-cheap: blurred once, then only transformed) ---------- */
+  .bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+  .bg::before { content: ""; position: absolute; inset: 0;
+    background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 44px 44px;
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 20%, transparent 75%);
+            mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 20%, transparent 75%); }
+  .blob { position: absolute; width: 520px; height: 520px; border-radius: 50%; filter: blur(100px); opacity: .22; will-change: transform; }
+  .blob.a { background: #22d3ee; top: -220px; left: -140px; animation: drift 18s ease-in-out infinite alternate; }
+  .blob.b { background: #6366f1; top: 35%; right: -220px; animation: drift 24s ease-in-out infinite alternate-reverse; }
+  @keyframes drift { to { transform: translate(90px, 70px) scale(1.15); } }
+
+  /* ---------- header ---------- */
+  header { position: sticky; top: 0; z-index: 20; border-bottom: 1px solid var(--line);
+    background: rgba(5, 7, 13, .65); -webkit-backdrop-filter: blur(14px) saturate(140%); backdrop-filter: blur(14px) saturate(140%); }
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap;
+    max-width: 1400px; margin: 0 auto; padding: 14px 28px; }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-mark { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 20px;
+    background: var(--grad); box-shadow: 0 8px 24px -8px rgba(34, 211, 238, .7); animation: float 4s ease-in-out infinite; }
+  @keyframes float { 50% { transform: translateY(-3px) rotate(-4deg); } }
+  h1 { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: -.4px; white-space: nowrap; }
+  .grad { background: var(--grad-text); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .chip { display: inline-block; vertical-align: middle; margin-left: 8px; padding: 3px 9px; border-radius: 99px;
+    border: 1px solid var(--line2); font-size: 11px; font-weight: 600; letter-spacing: .8px; text-transform: uppercase; color: var(--accent2); }
+  .status { display: inline-flex; align-items: center; padding: 6px 12px; border-radius: 99px; border: 1px solid var(--line);
+    background: var(--panel2); font-size: 13px; color: var(--muted); }
+  #acct { padding: 6px 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--panel2); }
+  #acct:empty, #credits:empty { display: none; }
+
+  /* ---------- layout ---------- */
+  main { display: grid; grid-template-columns: 340px minmax(0, 1fr) 300px; gap: 20px; align-items: start;
+    max-width: 1400px; margin: 0 auto; padding: 24px 28px 56px; }
   .stack > * + * { margin-top: 20px; }
-  button { font: inherit; cursor: pointer; border: 0; border-radius: 10px; padding: 9px 14px;
-    background: var(--accent); color: white; font-weight: 600; }
-  button:hover { background: var(--accent2); }
-  button.ghost { background: transparent; border: 1px solid var(--line); color: var(--text); font-weight: 500; }
-  button.ghost:hover { border-color: var(--accent); }
-  button.small { padding: 5px 10px; font-size: 13px; }
-  button:disabled { opacity: .45; cursor: not-allowed; }
-  .moves { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
-  .move { background: var(--panel2); border: 2px solid transparent; font-size: 34px; padding: 14px 0; border-radius: 12px; color: var(--text); }
-  .move small { display: block; font-size: 12px; color: var(--muted); font-weight: 500; }
-  .move:hover { background: var(--panel2); border-color: var(--line); }
-  .move.sel { border-color: var(--accent); background: #2a2342; }
-  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
-  input { width: 100%; font: inherit; padding: 9px 12px; background: var(--panel2); border: 1px solid var(--line);
-    border-radius: 10px; color: var(--text); margin-bottom: 14px; }
+  .panel { position: relative; padding: 20px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--panel);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, .04) inset, 0 24px 48px -28px rgba(0, 0, 0, .7);
+    animation: rise .55s var(--ease) both; animation-delay: calc(var(--d, 0) * 80ms); }
+  .panel::before { content: ""; position: absolute; top: 0; left: 18%; right: 18%; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(34, 211, 238, .55), transparent); }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+  h2 { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 1.4px; color: var(--muted); }
+  h2::before { content: ""; width: 7px; height: 7px; border-radius: 2px; background: var(--grad); transform: rotate(45deg); }
+  .section-gap { margin-top: 30px; }
+
+  /* ---------- buttons ---------- */
+  button { position: relative; overflow: hidden; font: inherit; font-weight: 700; cursor: pointer; border: 0; border-radius: 11px;
+    padding: 10px 16px; background: var(--grad); color: #031018; -webkit-tap-highlight-color: transparent;
+    transition: transform .15s var(--ease), box-shadow .2s, filter .2s, border-color .2s, opacity .2s; }
+  button:hover { filter: brightness(1.08); box-shadow: 0 10px 26px -10px rgba(34, 211, 238, .7); }
+  button:active { transform: scale(.97); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; filter: none; }
+  button.ghost { background: var(--panel2); border: 1px solid var(--line2); color: var(--text); font-weight: 500; }
+  button.ghost:hover { border-color: var(--accent); box-shadow: none; }
+  button.small { padding: 6px 12px; font-size: 13px; border-radius: 9px; }
+  button.connected { background: var(--panel2); color: var(--win); border: 1px solid rgba(52, 211, 153, .35); opacity: 1; }
+  .cta { width: 100%; padding: 13px 16px; font-size: 15px; }
+  .cta::before { content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 40%; transform: skewX(-20deg);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .45), transparent); transition: left .6s var(--ease); }
+  .cta:hover::before { left: 120%; }
+  button.busy { color: transparent; }
+  button.busy::after { content: ""; position: absolute; inset: 0; margin: auto; width: 18px; height: 18px; border-radius: 50%;
+    border: 2px solid rgba(3, 16, 24, .3); border-top-color: #031018; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- move picker ---------- */
+  .moves { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
+  .move { padding: 16px 0 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel2); color: var(--text); font-weight: 500; }
+  .move .emo { display: block; font-size: 38px; line-height: 1.1; transition: transform .25s var(--ease); }
+  .move small { display: block; margin-top: 6px; font-size: 12px; color: var(--muted); text-transform: capitalize; }
+  .move:hover { transform: translateY(-3px); border-color: var(--line2); box-shadow: 0 12px 24px -16px rgba(34, 211, 238, .6); filter: none; }
+  .move:hover .emo { transform: scale(1.12) rotate(-8deg); }
+  .move.sel { border-color: transparent;
+    background: linear-gradient(#0f1a30, #0f1a30) padding-box, var(--grad) border-box;
+    box-shadow: 0 12px 32px -12px rgba(34, 211, 238, .65); }
+  .move.sel small { color: var(--accent); font-weight: 600; }
+  .move.sel .emo { animation: pop .45s var(--ease); }
+  @keyframes pop { 0% { transform: scale(.75); } 55% { transform: scale(1.25) rotate(10deg); } 100% { transform: scale(1); } }
+
+  /* ---------- form ---------- */
+  label { display: block; margin-bottom: 8px; font-size: 13px; color: var(--muted); }
+  .field { position: relative; margin-bottom: 10px; }
+  .field .unit { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-size: 13px; font-weight: 600; color: var(--muted); pointer-events: none; }
+  input { width: 100%; padding: 11px 60px 11px 14px; font: inherit; font-size: 16px; color: var(--text);
+    background: rgba(0, 0, 0, .28); border: 1px solid var(--line2); border-radius: 11px; transition: border-color .2s, box-shadow .2s; }
+  input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(34, 211, 238, .15); }
+  .presets { display: flex; gap: 6px; margin-bottom: 16px; }
+  .presets button { flex: 1; }
+  .warn { margin: 14px 0 0; font-size: 12px; line-height: 1.55; color: var(--muted); }
+
+  /* ---------- tables & rows ---------- */
+  .tbl { overflow-x: auto; margin: 0 -8px; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 9px 6px; border-bottom: 1px solid var(--line); font-size: 14px; }
-  th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
-  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  th, td { padding: 11px 8px; border-bottom: 1px solid var(--line); text-align: left; font-size: 14px; white-space: nowrap; }
+  th { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+  tr:last-child td { border-bottom: 0; }
+  td { transition: background .2s; }
+  tr:hover td { background: rgba(34, 211, 238, .04); }
+  .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
   .muted { color: var(--muted); }
-  .pill { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 600; background: var(--panel2); }
+  .id { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .stake { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .vs { font-size: 18px; }
+  .vs i { margin: 0 4px; font-size: 11px; font-style: normal; font-weight: 600; color: var(--muted); }
+  .win, .lose, .draw { font-weight: 600; }
   .win { color: var(--win); } .lose { color: var(--lose); } .draw { color: var(--draw); }
   .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .empty { color: var(--muted); padding: 14px 0; font-size: 14px; }
-  #toast { position: fixed; bottom: 20px; right: 20px; max-width: 380px; background: var(--panel2); border: 1px solid var(--line);
-    border-radius: 12px; padding: 12px 16px; display: none; box-shadow: 0 10px 30px rgba(0,0,0,.4); }
-  #banner { display: none; background: #3a2333; color: #ffd0d7; padding: 10px 28px; font-size: 14px; }
-  .joinmoves button { font-size: 18px; padding: 3px 8px; background: var(--panel2); }
-  .joinmoves button:hover { background: var(--accent); }
-  .warn { font-size: 12px; color: var(--muted); margin-top: 10px; }
-  .live { width: 8px; height: 8px; border-radius: 50%; background: var(--lose); display: inline-block; margin-right: 6px; }
+  .joinmoves { justify-content: flex-end; flex-wrap: nowrap; gap: 6px; }
+  .joinmoves button { width: 38px; height: 38px; padding: 0; font-size: 18px; border-radius: 50%;
+    background: var(--panel2); border: 1px solid var(--line2); }
+  .joinmoves button:hover { transform: scale(1.12); border-color: var(--accent); background: rgba(34, 211, 238, .12);
+    box-shadow: 0 0 18px -4px rgba(34, 211, 238, .7); filter: none; }
+
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 600;
+    text-transform: capitalize; background: var(--panel2); color: var(--muted); }
+  .pill.open { color: var(--accent); background: rgba(34, 211, 238, .1); }
+  .pill.joined { color: var(--draw); background: rgba(251, 191, 36, .1); }
+  .pill.cancelled { color: var(--lose); background: rgba(251, 113, 133, .08); }
+
+  .mrow { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 11px 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel2); transition: border-color .2s; }
+  .mrow:hover { border-color: var(--line2); }
+  .mrow + .mrow { margin-top: 8px; }
+  .mrow.hot { border-color: rgba(251, 191, 36, .45); box-shadow: 0 0 0 1px rgba(251, 191, 36, .15), 0 8px 24px -14px rgba(251, 191, 36, .6); }
+
+  .rank { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 8px;
+    font-size: 12px; font-weight: 700; background: var(--panel2); color: var(--muted); }
+  .rank.r1 { background: linear-gradient(135deg, #fde68a, #f59e0b); color: #3a2500; }
+  .rank.r2 { background: linear-gradient(135deg, #f1f5f9, #94a3b8); color: #1e293b; }
+  .rank.r3 { background: linear-gradient(135deg, #fdba74, #c2410c); color: #2c0f00; }
+  .you { color: var(--accent); font-weight: 700; }
+  .elo { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .empty { padding: 22px 8px; text-align: center; font-size: 14px; color: var(--muted); }
+  .empty span { display: block; margin-bottom: 6px; font-size: 26px; opacity: .7; }
+
+  /* rows animate in only when they're new, not on every refresh */
+  .enter { animation: rowIn .45s var(--ease) both; }
+  @keyframes rowIn { from { opacity: 0; transform: translateY(8px); } }
+
+  .skel { height: 14px; margin: 14px 0; border-radius: 7px; background-size: 200% 100%; animation: shimmer 1.2s linear infinite;
+    background-image: linear-gradient(90deg, rgba(255, 255, 255, .04) 25%, rgba(255, 255, 255, .09) 50%, rgba(255, 255, 255, .04) 75%); }
+  .skel:nth-child(2) { width: 85%; } .skel:nth-child(3) { width: 65%; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+
+  /* ---------- live dot, toast, banner ---------- */
+  .live { position: relative; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--lose); }
   .live.on { background: var(--win); }
+  .live.on::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--win); animation: ping 1.8s var(--ease) infinite; }
+  @keyframes ping { to { transform: scale(2.8); opacity: 0; } }
+
+  #toast { position: fixed; right: 20px; bottom: 20px; z-index: 50; max-width: 380px; padding: 13px 16px;
+    border: 1px solid var(--line2); border-left: 3px solid var(--accent); border-radius: 12px;
+    background: rgba(12, 18, 33, .94); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    box-shadow: 0 18px 40px -12px rgba(0, 0, 0, .7);
+    opacity: 0; transform: translateY(16px) scale(.98); pointer-events: none; transition: opacity .25s, transform .35s var(--ease); }
+  #toast.show { opacity: 1; transform: none; pointer-events: auto; }
+  #toast.err { border-left-color: var(--lose); }
+  #toast.ok { border-left-color: var(--win); }
+  #banner { display: none; padding: 11px 28px; font-size: 14px; color: #ffe4e8;
+    background: linear-gradient(90deg, rgba(251, 113, 133, .25), rgba(251, 191, 36, .15)); border-bottom: 1px solid rgba(251, 113, 133, .3); }
+
+  /* ---------- responsive ---------- */
+  /* Drop secondary columns whenever the panel itself is narrow, at any screen size. */
+  .panel { container-type: inline-size; }
+  @container (max-width: 560px) { .hide-sm { display: none; } }
+  @media (max-width: 1180px) {
+    main { grid-template-columns: 320px minmax(0, 1fr); }
+    #boardPanel { grid-column: 1 / -1; }
+  }
+  @media (max-width: 780px) {
+    main { grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 16px 16px 40px; }
+    .stack > * + * { margin-top: 16px; }
+    .bar { padding: 12px 16px; }
+    #banner { padding: 10px 16px; }
+    .panel { padding: 16px; }
+    #toast { left: 16px; right: 16px; bottom: 16px; max-width: none; }
+  }
+  @media (max-width: 440px) {
+    .chip { display: none; }
+    h1 { font-size: 19px; }
+    .logo-mark { width: 36px; height: 36px; font-size: 18px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  }
 </style>
 </head>
 <body>
+<div class="bg" aria-hidden="true"><div class="blob a"></div><div class="blob b"></div></div>
 <div id="banner"></div>
 <header>
-  <h1>✊✋✌️ RPS Arena <span>on Monad</span></h1>
-  <div class="row">
-    <span class="muted" style="font-size:13px"><span id="live" class="live"></span><span id="liveText">offline</span></span>
-    <span id="credits"></span>
-    <span id="acct" class="mono muted"></span>
-    <button id="connect">Connect wallet</button>
+  <div class="bar">
+    <div class="logo">
+      <div class="logo-mark" aria-hidden="true">✊</div>
+      <h1><span class="grad">RPS Arena</span><span class="chip">on Monad</span></h1>
+    </div>
+    <div class="row">
+      <span class="status"><span id="live" class="live"></span><span id="liveText">offline</span></span>
+      <span id="credits"></span>
+      <span id="acct" class="mono muted"></span>
+      <button id="connect">Connect wallet</button>
+    </div>
   </div>
 </header>
 
 <main>
   <section class="stack">
-    <div class="panel">
+    <div class="panel" style="--d:0">
       <h2>New match</h2>
       <div class="moves" id="createMoves"></div>
-      <label for="stake">Stake (MON) — opponent must match it</label>
-      <input id="stake" type="number" min="0" step="0.001" value="0.01" />
-      <button id="createBtn" style="width:100%">Lock in move &amp; create</button>
-      <p class="warn">Your move stays hidden (only a hash goes on-chain). Your secret is stored in this browser —
-        lose it and you can't reveal, which forfeits the match. <a href="#" id="backup" style="color:var(--accent2)">Back up secrets</a></p>
+      <label for="stake">Stake: your opponent must match it</label>
+      <div class="field">
+        <input id="stake" type="number" min="0" step="0.001" value="0.01" inputmode="decimal" />
+        <span class="unit">MON</span>
+      </div>
+      <div class="presets" id="presets">
+        <button class="small ghost" data-preset="0.01">0.01</button>
+        <button class="small ghost" data-preset="0.05">0.05</button>
+        <button class="small ghost" data-preset="0.1">0.1</button>
+        <button class="small ghost" data-preset="0.5">0.5</button>
+      </div>
+      <button id="createBtn" class="cta">Lock in move &amp; create</button>
+      <p class="warn">Your move stays hidden: only a hash goes on-chain. Your secret is stored in this browser.
+        If you lose it you can't reveal, and you forfeit the match. <a href="#" id="backup">Back up secrets</a></p>
     </div>
-    <div class="panel">
+    <div class="panel" style="--d:1">
       <h2>Your matches</h2>
-      <div id="mine"></div>
+      <div id="mine"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
     </div>
   </section>
 
-  <section class="panel">
+  <section class="panel" style="--d:2">
     <h2>Open matches</h2>
-    <div id="open"></div>
-    <h2 style="margin-top:28px">Recent results</h2>
-    <div id="recent"></div>
+    <div id="open"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+    <h2 class="section-gap">Recent results</h2>
+    <div id="recent"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
   </section>
 
-  <section class="panel">
+  <section class="panel" id="boardPanel" style="--d:3">
     <h2>Leaderboard</h2>
-    <div id="board"></div>
+    <div id="board"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
   </section>
 </main>
-<div id="toast"></div>
+<div id="toast" role="status" aria-live="polite"></div>
 
 <script type="module">
 import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.min.js";
@@ -113,11 +286,24 @@ const short = (a) => (a ? a.slice(0, 6) + "…" + a.slice(-4) : "—");
 const fmt = (wei) => ethers.formatEther(wei).replace(/\.?0+$/, "") || "0";
 const isMe = (a) => me && a && a.toLowerCase() === me.toLowerCase();
 function toast(msg, ms = 4000) {
-  const t = $("toast"); t.innerHTML = msg; t.style.display = "block";
-  clearTimeout(t._h); t._h = setTimeout(() => (t.style.display = "none"), ms);
+  const t = $("toast"); t.innerHTML = msg;
+  t.className = "show" + (msg.startsWith("⚠️") ? " err" : msg.startsWith("Confirmed") ? " ok" : "");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), ms);
 }
 async function api(path) { const r = await fetch(path); if (!r.ok) throw new Error(await r.text()); return r.json(); }
 function errMsg(e) { return e?.shortMessage || e?.info?.error?.message || e?.message || String(e); }
+const empty = (icon, text) => `<div class="empty" data-k="empty"><span>${icon}</span>${text}</div>`;
+
+// Animate only rows whose key wasn't there on the previous render, so refreshes don't flicker.
+const seen = {};
+function animateRows(id) {
+  const prev = seen[id], next = new Set(); let i = 0;
+  $(id).querySelectorAll("[data-k]").forEach((el) => {
+    const k = el.dataset.k; next.add(k);
+    if (!prev || !prev.has(k)) { el.classList.add("enter"); el.style.animationDelay = `${Math.min(i++, 10) * 40}ms`; }
+  });
+  seen[id] = next;
+}
 
 // Secrets are keyed by commitment hash, so we can always find the one for a match on-chain.
 const SECRETS_KEY = "rps-secrets";
@@ -148,7 +334,8 @@ async function connect() {
   signer = await provider.getSigner();
   me = await signer.getAddress();
   contract = new ethers.Contract(cfg.contractAddress, cfg.abi, signer);
-  $("connect").textContent = "Connected";
+  $("connect").textContent = "● Connected";
+  $("connect").classList.add("connected");
   $("connect").disabled = true;
   await refreshAccount();
   render();
@@ -221,46 +408,55 @@ function countdown(deadline) {
 
 async function renderOpen() {
   const rows = await api("/api/matches?status=open");
-  $("open").innerHTML = rows.length ? `<table><tr><th>#</th><th>Host</th><th>Stake</th><th></th></tr>${rows.map((m) => `
-    <tr><td>${m.id}</td><td class="mono">${isMe(m.creator) ? "you" : short(m.creator)}</td><td>${fmt(m.stake_wei)} MON</td>
+  $("open").innerHTML = rows.length ? `<div class="tbl"><table><tr><th>#</th><th>Host</th><th>Stake</th><th></th></tr>${rows.map((m) => `
+    <tr data-k="${m.id}"><td class="id">${m.id}</td><td class="mono">${isMe(m.creator) ? `<span class="you">you</span>` : short(m.creator)}</td>
+    <td class="stake">${fmt(m.stake_wei)} MON</td>
     <td style="text-align:right">${isMe(m.creator)
       ? `<button class="small ghost" data-cancel="${m.id}">Cancel</button>`
-      : `<span class="row joinmoves" style="justify-content:flex-end">${[1, 2, 3].map((k) =>
-          `<button data-join="${m.id}" data-stake="${m.stake_wei}" data-move="${k}" title="Join with ${MOVES[k][1]}">${MOVES[k][0]}</button>`).join("")}</span>`}
-    </td></tr>`).join("")}</table>` : `<div class="empty">No open matches. Create one!</div>`;
+      : `<span class="row joinmoves">${[1, 2, 3].map((k) =>
+          `<button data-join="${m.id}" data-stake="${m.stake_wei}" data-move="${k}" title="Join with ${MOVES[k][1]}" aria-label="Join with ${MOVES[k][1]}">${MOVES[k][0]}</button>`).join("")}</span>`}
+    </td></tr>`).join("")}</table></div>` : empty("🎯", "No open matches. Create one!");
+  animateRows("open");
 }
 
 async function renderRecent() {
   const rows = await api("/api/matches?status=settled&limit=15");
-  $("recent").innerHTML = rows.length ? `<table><tr><th>#</th><th>Host</th><th></th><th>Challenger</th><th>Stake</th><th>Result</th></tr>${rows.map((m) => `
-    <tr><td>${m.id}</td><td class="mono">${short(m.creator)}</td><td>${mv(m.creator_move)} vs ${mv(m.joiner_move)}</td>
-    <td class="mono">${short(m.joiner)}</td><td>${fmt(m.stake_wei)}</td><td>${resultFor(m)}</td></tr>`).join("")}</table>`
-    : `<div class="empty">No games played yet.</div>`;
+  $("recent").innerHTML = rows.length ? `<div class="tbl"><table><tr><th>#</th><th class="hide-sm">Host</th><th>Moves</th><th class="hide-sm">Challenger</th><th>Stake</th><th>Result</th></tr>${rows.map((m) => `
+    <tr data-k="${m.id}"><td class="id">${m.id}</td><td class="mono hide-sm">${short(m.creator)}</td>
+    <td class="vs">${mv(m.creator_move)}<i>vs</i>${mv(m.joiner_move)}</td>
+    <td class="mono hide-sm">${short(m.joiner)}</td><td class="stake">${fmt(m.stake_wei)}</td><td>${resultFor(m)}</td></tr>`).join("")}</table></div>`
+    : empty("🕹️", "No games played yet.");
+  animateRows("recent");
 }
 
 async function renderMine() {
-  if (!me) { $("mine").innerHTML = `<div class="empty">Connect a wallet to see your matches.</div>`; return; }
+  if (!me) { $("mine").innerHTML = empty("🔌", "Connect a wallet to see your matches."); animateRows("mine"); return; }
   const rows = await api(`/api/matches?player=${me}&limit=20`);
   $("mine").innerHTML = rows.length ? rows.map((m) => {
-    let action = "", state = `<span class="pill">${m.status}</span>`;
+    let action = "", hot = false, state = `<span class="pill ${m.status}">${m.status}</span>`;
     if (m.status === "joined" && isMe(m.creator)) {
+      hot = true;
       action = `<button class="small" data-reveal="${m.id}">Reveal</button>`;
       state = `<span class="draw">${mv(m.joiner_move)} played · ${countdown(m.reveal_deadline)}</span>`;
     } else if (m.status === "joined" && isMe(m.joiner)) {
       const expired = m.reveal_deadline < Date.now() / 1000;
+      hot = expired;
       action = expired ? `<button class="small" data-claim="${m.id}">Claim win</button>` : "";
       state = expired ? `<span class="win">Host didn't reveal</span>` : `<span class="muted">Waiting for reveal · ${countdown(m.reveal_deadline)}</span>`;
     } else if (m.status === "settled") state = resultFor(m);
-    return `<div class="row" style="justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line)">
-      <span>#${m.id} · ${fmt(m.stake_wei)} MON</span><span class="row">${state} ${action}</span></div>`;
-  }).join("") : `<div class="empty">You haven't played yet.</div>`;
+    return `<div class="mrow${hot ? " hot" : ""}" data-k="${m.id}-${m.status}">
+      <span><span class="id">#${m.id}</span> · <span class="stake">${fmt(m.stake_wei)} MON</span></span><span class="row">${state} ${action}</span></div>`;
+  }).join("") : empty("✨", "You haven't played yet.");
+  animateRows("mine");
 }
 
 async function renderBoard() {
   const rows = await api("/api/leaderboard");
-  $("board").innerHTML = rows.length ? `<table><tr><th>#</th><th>Player</th><th>Elo</th><th>W-L-D</th></tr>${rows.map((p, i) => `
-    <tr><td>${i + 1}</td><td class="mono">${isMe(p.address) ? "<b>you</b>" : short(p.address)}</td><td><b>${p.elo}</b></td>
-    <td class="muted">${p.wins}-${p.losses}-${p.draws}</td></tr>`).join("")}</table>` : `<div class="empty">No ranked players yet.</div>`;
+  $("board").innerHTML = rows.length ? `<div class="tbl"><table><tr><th>#</th><th>Player</th><th>Elo</th><th>W-L-D</th></tr>${rows.map((p, i) => `
+    <tr data-k="${p.address}"><td><span class="rank ${i < 3 ? "r" + (i + 1) : ""}">${i + 1}</span></td>
+    <td class="mono">${isMe(p.address) ? `<span class="you">you</span>` : short(p.address)}</td><td class="elo">${p.elo}</td>
+    <td class="muted">${p.wins}-${p.losses}-${p.draws}</td></tr>`).join("")}</table></div>` : empty("🏆", "No ranked players yet.");
+  animateRows("board");
 }
 
 let renderQueued = false;
@@ -283,7 +479,7 @@ function connectWs() {
     if (msg.type !== "match") return;
     const m = msg.match;
     if (isMe(m.creator) && m.status === "joined")
-      toast(`Someone joined #${m.id} with ${mv(m.joiner_move)} — <b>reveal now!</b>`, 10000);
+      toast(`Someone joined #${m.id} with ${mv(m.joiner_move)}. <b>Reveal now!</b>`, 10000);
     if ((isMe(m.creator) || isMe(m.joiner)) && m.status === "settled") { toast(`Match #${m.id}: ${resultFor(m)}`, 8000); refreshAccount(); }
     render();
   };
@@ -299,14 +495,20 @@ document.addEventListener("click", (e) => {
   if (d.cancel) cancel(Number(d.cancel));
 });
 $("createMoves").innerHTML = [1, 2, 3].map((k) =>
-  `<button class="move ${k === 1 ? "sel" : ""}" data-pick="${k}">${MOVES[k][0]}<small>${MOVES[k][1]}</small></button>`).join("");
+  `<button class="move ${k === 1 ? "sel" : ""}" data-pick="${k}" aria-label="${MOVES[k][1]}"><span class="emo">${MOVES[k][0]}</span><small>${MOVES[k][1]}</small></button>`).join("");
 $("createMoves").onclick = (e) => {
   const b = e.target.closest("[data-pick]"); if (!b) return;
   selectedMove = Number(b.dataset.pick);
   document.querySelectorAll(".move").forEach((x) => x.classList.toggle("sel", x === b));
 };
+$("presets").onclick = (e) => {
+  const b = e.target.closest("[data-preset]"); if (b) $("stake").value = b.dataset.preset;
+};
 $("connect").onclick = () => connect().catch((e) => toast("⚠️ " + errMsg(e)));
-$("createBtn").onclick = () => createMatch().catch(() => {});
+$("createBtn").onclick = async () => {
+  const b = $("createBtn"); b.classList.add("busy"); b.disabled = true;
+  try { await createMatch(); } catch {} finally { b.classList.remove("busy"); b.disabled = false; }
+};
 $("backup").onclick = (e) => {
   e.preventDefault();
   const blob = new Blob([JSON.stringify(loadSecrets(), null, 2)], { type: "application/json" });
@@ -318,6 +520,7 @@ cfg = await api("/api/config");
 if (!cfg.contractAddress) {
   $("banner").style.display = "block";
   $("banner").textContent = "CONTRACT_ADDRESS is not set on the server. Run `python -m scripts.deploy`, then restart the API.";
+  for (const id of ["open", "recent", "mine", "board"]) $(id).innerHTML = empty("⛓️", "No contract deployed yet.");
 } else {
   window.ethereum?.on?.("accountsChanged", () => location.reload());
   window.ethereum?.on?.("chainChanged", () => location.reload());
