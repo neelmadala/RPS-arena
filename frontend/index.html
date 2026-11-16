@@ -187,6 +187,27 @@
   #toast.ok { border-left-color: var(--win); }
   #banner { display: none; padding: 11px 28px; font-size: 14px; color: #ffe4e8;
     background: linear-gradient(90deg, rgba(251, 113, 133, .25), rgba(251, 191, 36, .15)); border-bottom: 1px solid rgba(251, 113, 133, .3); }
+  [hidden] { display: none !important; } /* .row's display:flex would otherwise beat the hidden attribute */
+
+  /* ---------- quick play (session key) ---------- */
+  #sessionPanel::before { background: linear-gradient(90deg, transparent, rgba(251, 191, 36, .6), transparent); }
+  #sessionPanel input, #sessionPanel select { margin-bottom: 14px; }
+  #sessionPanel input { padding-right: 14px; }
+  .bolt { color: var(--draw); }
+  #sessionPanel h2::before { display: none; }
+  h2 .bolt { font-size: 14px; }
+  .sess-intro { margin: 0 0 16px; font-size: 14px; color: var(--muted); }
+  .sess-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+  .sess-stats { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; margin-bottom: 16px; padding: 12px 14px;
+    border: 1px solid var(--line); border-radius: 12px; background: var(--panel2); font-size: 14px; }
+  .sess-stats b { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+  .sess-actions { gap: 6px; }
+  .sess-bal { justify-content: space-between; margin-top: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel2); }
+  select { width: 100%; padding: 11px 38px 11px 14px; font: inherit; font-size: 16px; color: var(--text); cursor: pointer;
+    background: rgba(0, 0, 0, .28) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='%237c8aa5' stroke-width='2'%3E%3Cpath d='M1 1l5 5 5-5'/%3E%3C/svg%3E") no-repeat right 14px center;
+    border: 1px solid var(--line2); border-radius: 11px; -webkit-appearance: none; appearance: none; transition: border-color .2s, box-shadow .2s; }
+  select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(34, 211, 238, .15); }
+  select option { background: var(--panel-solid); }
 
   /* ---------- responsive ---------- */
   /* Drop secondary columns whenever the panel itself is narrow, at any screen size. */
@@ -234,7 +255,43 @@
 
 <main>
   <section class="stack">
-    <div class="panel" style="--d:0">
+    <div class="panel" id="sessionPanel" style="--d:0">
+      <h2><span class="bolt">⚡</span> Quick play</h2>
+      <div id="sessOff">
+        <p class="sess-intro">Approve once, then play with no wallet popups.
+          A temporary key in this browser plays for you from a game balance, and reveals your moves automatically.</p>
+        <div class="sess-grid">
+          <div><label for="sessDeposit">Game balance (MON)</label><input id="sessDeposit" type="number" min="0" step="0.01" value="1" /></div>
+          <div><label for="sessGas">Gas for key (MON)</label><input id="sessGas" type="number" min="0.04" step="0.01" value="0.3" /></div>
+        </div>
+        <label for="sessHours">Session length</label>
+        <select id="sessHours"><option value="1">1 hour</option><option value="4" selected>4 hours</option><option value="24">24 hours</option></select>
+        <button id="sessStart" class="cta">⚡ Start session (1 approval)</button>
+        <p class="warn">The key can only stake from your game balance, and only until it expires. It can never withdraw:
+          only your wallet can. The gas MON goes to the key and is sent back to you when you end the session.</p>
+        <div id="sessOffBal" hidden class="row sess-bal">
+          <span>Game balance: <b id="sessOffBalAmt"></b></span>
+          <button class="small ghost" id="sessOffWithdraw">Withdraw</button>
+        </div>
+      </div>
+      <div id="sessOn" hidden>
+        <div class="sess-stats">
+          <span class="muted">Game balance</span><b id="sessBal">—</b>
+          <span class="muted">Key gas</span><b id="sessKeyGas">—</b>
+          <span class="muted">Expires</span><b id="sessExp">—</b>
+        </div>
+        <label for="sessTopupAmt">Add to game balance (MON)</label>
+        <input id="sessTopupAmt" type="number" min="0" step="0.01" value="1" />
+        <div class="row sess-actions">
+          <button class="small" id="sessTopup">Add funds</button>
+          <button class="small ghost" id="sessAddGas">Add 0.2 gas</button>
+          <button class="small ghost" id="sessWithdraw">Withdraw balance</button>
+          <button class="small ghost" id="sessEnd">End session</button>
+        </div>
+        <p class="warn" id="sessWarn"></p>
+      </div>
+    </div>
+    <div class="panel" style="--d:1">
       <h2>New match</h2>
       <div class="moves" id="createMoves"></div>
       <label for="stake">Stake: your opponent must match it</label>
@@ -252,20 +309,20 @@
       <p class="warn">Your move stays hidden: only a hash goes on-chain. Your secret is stored in this browser.
         If you lose it you can't reveal, and you forfeit the match. <a href="#" id="backup">Back up secrets</a></p>
     </div>
-    <div class="panel" style="--d:1">
+    <div class="panel" style="--d:2">
       <h2>Your matches</h2>
       <div id="mine"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
     </div>
   </section>
 
-  <section class="panel" style="--d:2">
+  <section class="panel" style="--d:3">
     <h2>Open matches</h2>
     <div id="open"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
     <h2 class="section-gap">Recent results</h2>
     <div id="recent"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
   </section>
 
-  <section class="panel" id="boardPanel" style="--d:3">
+  <section class="panel" id="boardPanel" style="--d:4">
     <h2>Leaderboard</h2>
     <div id="board"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
   </section>
@@ -280,6 +337,14 @@ const MOVE_ID = { rock: 1, paper: 2, scissors: 3 };
 const $ = (id) => document.getElementById(id);
 let cfg, provider, signer, me, contract;
 let selectedMove = 1;
+// Session key: a wallet that lives in this browser and signs for the player without popups.
+let rpc, sessWallet, sessContract;
+let sess = null; // { key, expiry, allowance, credits, keyGas, mine, live }
+const autoRevealing = new Set();
+// Monad checks the worst-case fee (gas limit × max fee) up front: up to ~0.036 MON for createMatch.
+const MIN_KEY_GAS = ethers.parseEther("0.04");
+const ADD_GAS = ethers.parseEther("0.2");
+const MAX_UINT = 2n ** 256n - 1n;
 
 // ---------- helpers ----------
 const short = (a) => (a ? a.slice(0, 6) + "…" + a.slice(-4) : "—");
@@ -287,7 +352,7 @@ const fmt = (wei) => ethers.formatEther(wei).replace(/\.?0+$/, "") || "0";
 const isMe = (a) => me && a && a.toLowerCase() === me.toLowerCase();
 function toast(msg, ms = 4000) {
   const t = $("toast"); t.innerHTML = msg;
-  t.className = "show" + (msg.startsWith("⚠️") ? " err" : msg.startsWith("Confirmed") ? " ok" : "");
+  t.className = "show" + (msg.startsWith("⚠️") ? " err" : msg.trim().endsWith("✓") ? " ok" : "");
   clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), ms);
 }
 async function api(path) { const r = await fetch(path); if (!r.ok) throw new Error(await r.text()); return r.json(); }
@@ -345,9 +410,7 @@ async function refreshAccount() {
   if (!me) return;
   const [bal, credit] = await Promise.all([provider.getBalance(me), contract.credits(me)]);
   $("acct").textContent = `${short(me)} · ${fmt(bal)} MON`;
-  $("credits").innerHTML = credit > 0n
-    ? `<button class="small" id="withdraw">Withdraw ${fmt(credit)} MON</button>` : "";
-  if (credit > 0n) $("withdraw").onclick = () => send(contract.withdraw(), "Withdrawing…");
+  await refreshSession(credit);
 }
 
 async function send(txPromise, pending) {
@@ -362,20 +425,137 @@ async function send(txPromise, pending) {
   } catch (e) { toast("⚠️ " + errMsg(e), 7000); throw e; }
 }
 
+// ---------- session key ----------
+// The private key is stored per contract + player, so a new deploy or another account never reuses it.
+const sessStoreKey = () => `rps-session:${cfg.contractAddress.toLowerCase()}:${me.toLowerCase()}`;
+const loadKey = () => { try { return JSON.parse(localStorage.getItem(sessStoreKey()) || "null"); } catch { return null; } };
+const saveKey = (pk) => localStorage.setItem(sessStoreKey(), JSON.stringify({ pk, saved: Date.now() }));
+const dropKey = () => localStorage.removeItem(sessStoreKey());
+
+function useKey(pk) {
+  sessWallet = pk ? new ethers.Wallet(pk, rpc) : null;
+  sessContract = sessWallet ? new ethers.Contract(cfg.contractAddress, cfg.abi, sessWallet) : null;
+}
+
+async function refreshSession(credit) {
+  const stored = loadKey();
+  if (stored && (!sessWallet || sessWallet.privateKey !== stored.pk)) useKey(stored.pk);
+  const [key, expiry, allowance] = await contract.sessions(me);
+  const mine = !!sessWallet && key.toLowerCase() === sessWallet.address.toLowerCase();
+  const keyGas = sessWallet ? await rpc.getBalance(sessWallet.address) : 0n;
+  sess = { key, expiry: Number(expiry), allowance, credits: credit, keyGas, mine,
+           live: mine && Number(expiry) > Date.now() / 1000 };
+  renderSession();
+}
+
+function renderSession() {
+  const s = sess, on = !!s?.mine;
+  $("sessOff").hidden = on; $("sessOn").hidden = !on;
+  $("sessOffBal").hidden = on || !s || s.credits === 0n;
+  if (!s) return;
+  $("sessOffBalAmt").textContent = `${fmt(s.credits)} MON`;
+  if (!on) return;
+  $("sessBal").textContent = `${fmt(s.credits)} MON`;
+  $("sessKeyGas").textContent = `${fmt(s.keyGas)} MON`;
+  const left = s.expiry - Math.floor(Date.now() / 1000);
+  $("sessExp").innerHTML = left > 0 ? `in ${Math.floor(left / 3600)}h ${Math.floor((left % 3600) / 60)}m`
+                                    : `<span class="lose">expired</span>`;
+  const warn = [];
+  if (!s.live) warn.push("Session expired: new games use your wallet again. Your key can still reveal and claim open games.");
+  if (s.keyGas < MIN_KEY_GAS) warn.push("Key is low on gas, so actions fall back to wallet popups. Click “Add 0.2 gas”.");
+  if (s.live && s.credits === 0n) warn.push("Game balance is empty, so new games use your wallet. Click “Add funds”.");
+  $("sessWarn").textContent = warn.join(" ");
+}
+
+// Session-key transactions go one at a time so their nonces never collide.
+let keyQueue = Promise.resolve();
+function sendKey(fn, pending) {
+  const run = async () => {
+    try {
+      toast("⚡ " + pending, 60000);
+      // Monad validates against state a few blocks old, so a key funded moments ago can briefly
+      // look empty ("insufficient balance"). Wait and retry instead of failing.
+      let tx;
+      for (let i = 0; ; i++) {
+        try { tx = await fn(); break; }
+        catch (e) {
+          if (i >= 5 || !/insufficient (balance|funds)/i.test(errMsg(e))) throw e;
+          await new Promise((res) => setTimeout(res, 1500));
+        }
+      }
+      const r = await tx.wait();
+      toast("⚡ Confirmed ✓");
+      refreshAccount();
+      return r;
+    } catch (e) { toast("⚠️ " + errMsg(e), 7000); throw e; }
+  };
+  const p = keyQueue.then(run, run);
+  keyQueue = p.catch(() => {});
+  return p;
+}
+
+const keyHasGas = () => sess?.mine && sess.keyGas >= MIN_KEY_GAS;
+const keyCanSpend = (stake) => keyHasGas() && sess.live && sess.credits >= stake && sess.allowance >= stake;
+
+/// Send a key's leftover gas back to the player's wallet (no popup: the key signs it).
+async function sweepKey(wallet) {
+  const bal = await rpc.getBalance(wallet.address);
+  const price = ((await rpc.getFeeData()).gasPrice * 12n) / 10n;
+  const cost = 21000n * price;
+  if (bal <= cost) return;
+  const tx = await wallet.sendTransaction({ to: me, value: bal - cost, gasLimit: 21000n, gasPrice: price, type: 0 });
+  await tx.wait();
+}
+
+async function startSession() {
+  if (!contract) await connect();
+  const deposit = ethers.parseEther($("sessDeposit").value || "0");
+  const gas = ethers.parseEther($("sessGas").value || "0");
+  const hours = Number($("sessHours").value);
+  if (gas < MIN_KEY_GAS) return toast(`Give the key at least ${fmt(MIN_KEY_GAS)} MON of gas.`);
+  // Recover gas from an older key in this browser before replacing it.
+  if (sessWallet) await sweepKey(sessWallet).catch(() => {});
+  const key = ethers.Wallet.createRandom();
+  saveKey(key.privateKey); // save BEFORE sending, like move secrets
+  useKey(key.privateKey);
+  // The key may stake anything in the game balance; the balance itself is the limit.
+  await send(contract.startSession(key.address, hours * 3600, MAX_UINT, gas, { value: deposit + gas }),
+             "Starting session…");
+}
+
+async function endSession() {
+  if (keyHasGas()) {
+    await sendKey(() => sessContract.endSession(), "Ending session…");
+  } else {
+    await send(contract.endSession(), "Ending session…");
+  }
+  try { await sweepKey(sessWallet); toast("Session ended. Leftover gas sent back to your wallet ✓"); } catch (e) { console.warn(e); }
+  dropKey(); useKey(null); refreshAccount();
+}
+
+const topUp = () => send(contract.deposit({ value: ethers.parseEther($("sessTopupAmt").value || "0") }), "Adding funds…");
+const addGas = () => send(signer.sendTransaction({ to: sessWallet.address, value: ADD_GAS }), "Sending gas to key…");
+const withdrawBalance = () => send(contract.withdraw(), "Withdrawing…");
+
 // ---------- actions ----------
 async function createMatch() {
   if (!contract) await connect();
   const stake = ethers.parseEther($("stake").value || "0");
   const salt = ethers.hexlify(ethers.randomBytes(32));
+  // The commitment is always for the player's address, even when the key sends it.
   const commitment = ethers.solidityPackedKeccak256(
     ["address", "address", "uint8", "bytes32"], [cfg.contractAddress, me, selectedMove, salt]);
   // Save BEFORE sending so a closed tab can't lose the secret.
   saveSecret(commitment, { move: selectedMove, salt, created: Date.now() });
+  if (keyCanSpend(stake))
+    return sendKey(() => sessContract.createMatchFromBalance(commitment, stake), "Creating match…");
   await send(contract.createMatch(commitment, { value: stake }), "Creating match…");
 }
 
 async function joinMatch(id, stakeWei, move) {
   if (!contract) await connect();
+  if (keyCanSpend(BigInt(stakeWei)))
+    return sendKey(() => sessContract.joinMatchFromBalance(id, move), `Joining #${id}…`);
   await send(contract.joinMatch(id, move, { value: BigInt(stakeWei) }), `Joining #${id}…`);
 }
 
@@ -383,11 +563,24 @@ async function reveal(id) {
   const m = await contract.getMatch(id);
   const secret = loadSecrets()[m.commitment.toLowerCase()];
   if (!secret) return toast("No secret for this match in this browser. Import your backup or it will be forfeited.", 8000);
+  if (keyHasGas()) return sendKey(() => sessContract.reveal(id, secret.move, secret.salt), `Revealing #${id}…`);
   await send(contract.reveal(id, secret.move, secret.salt), `Revealing #${id}…`);
 }
 
-const claim = (id) => send(contract.claimTimeout(id), `Claiming #${id}…`);
-const cancel = (id) => send(contract.cancelMatch(id), `Cancelling #${id}…`);
+const claim = (id) => keyHasGas()
+  ? sendKey(() => sessContract.claimTimeout(id), `Claiming #${id}…`)
+  : send(contract.claimTimeout(id), `Claiming #${id}…`);
+const cancel = (id) => keyHasGas()
+  ? sendKey(() => sessContract.cancelMatch(id), `Cancelling #${id}…`)
+  : send(contract.cancelMatch(id), `Cancelling #${id}…`);
+
+/// With a session, reveal as soon as someone joins one of our matches. No click, no popup.
+function maybeAutoReveal(m) {
+  if (!keyHasGas() || m.status !== "joined" || !isMe(m.creator) || autoRevealing.has(m.id)) return;
+  if (m.reveal_deadline && m.reveal_deadline < Date.now() / 1000) return;
+  autoRevealing.add(m.id);
+  reveal(m.id).catch(() => setTimeout(() => autoRevealing.delete(m.id), 10000)); // retry later on failure
+}
 
 // ---------- rendering ----------
 function resultFor(m) {
@@ -435,8 +628,12 @@ async function renderMine() {
   $("mine").innerHTML = rows.length ? rows.map((m) => {
     let action = "", hot = false, state = `<span class="pill ${m.status}">${m.status}</span>`;
     if (m.status === "joined" && isMe(m.creator)) {
-      hot = true;
-      action = `<button class="small" data-reveal="${m.id}">Reveal</button>`;
+      maybeAutoReveal(m);
+      const auto = autoRevealing.has(m.id);
+      hot = !auto; // only highlight when the player has to act
+      action = auto
+        ? `<span class="bolt" title="Your session key is revealing this automatically">⚡ revealing…</span>`
+        : `<button class="small" data-reveal="${m.id}">Reveal</button>`;
       state = `<span class="draw">${mv(m.joiner_move)} played · ${countdown(m.reveal_deadline)}</span>`;
     } else if (m.status === "joined" && isMe(m.joiner)) {
       const expired = m.reveal_deadline < Date.now() / 1000;
@@ -478,8 +675,10 @@ function connectWs() {
     const msg = JSON.parse(ev.data);
     if (msg.type !== "match") return;
     const m = msg.match;
-    if (isMe(m.creator) && m.status === "joined")
-      toast(`Someone joined #${m.id} with ${mv(m.joiner_move)}. <b>Reveal now!</b>`, 10000);
+    if (isMe(m.creator) && m.status === "joined") {
+      if (keyHasGas()) { toast(`Someone joined #${m.id} with ${mv(m.joiner_move)}. ⚡ Revealing automatically…`, 6000); maybeAutoReveal(m); }
+      else toast(`Someone joined #${m.id} with ${mv(m.joiner_move)}. <b>Reveal now!</b>`, 10000);
+    }
     if ((isMe(m.creator) || isMe(m.joiner)) && m.status === "settled") { toast(`Match #${m.id}: ${resultFor(m)}`, 8000); refreshAccount(); }
     render();
   };
@@ -509,6 +708,13 @@ $("createBtn").onclick = async () => {
   const b = $("createBtn"); b.classList.add("busy"); b.disabled = true;
   try { await createMatch(); } catch {} finally { b.classList.remove("busy"); b.disabled = false; }
 };
+const guard = (fn) => () => fn().catch((e) => { console.error(e); });
+$("sessStart").onclick = guard(startSession);
+$("sessEnd").onclick = guard(endSession);
+$("sessTopup").onclick = guard(topUp);
+$("sessAddGas").onclick = guard(addGas);
+$("sessWithdraw").onclick = guard(withdrawBalance);
+$("sessOffWithdraw").onclick = guard(withdrawBalance);
 $("backup").onclick = (e) => {
   e.preventDefault();
   const blob = new Blob([JSON.stringify(loadSecrets(), null, 2)], { type: "application/json" });
@@ -522,11 +728,17 @@ if (!cfg.contractAddress) {
   $("banner").textContent = "CONTRACT_ADDRESS is not set on the server. Run `python -m scripts.deploy`, then restart the API.";
   for (const id of ["open", "recent", "mine", "board"]) $(id).innerHTML = empty("⛓️", "No contract deployed yet.");
 } else {
+  // Read-only connection straight to Monad, used by the session key (no wallet involved).
+  rpc = new ethers.JsonRpcProvider(cfg.rpcUrl, cfg.chainId, { staticNetwork: true });
   window.ethereum?.on?.("accountsChanged", () => location.reload());
   window.ethereum?.on?.("chainChanged", () => location.reload());
   connectWs();
   render();
   setInterval(render, 15000); // also refreshes countdowns
+  setInterval(() => me && refreshAccount().catch(() => {}), 20000); // balances, key gas, expiry
+  // Reconnect silently if the wallet already authorized this site, so a session resumes on reload.
+  window.ethereum?.request?.({ method: "eth_accounts" })
+    .then((a) => a?.length && connect()).catch(() => {});
 }
 </script>
 </body>
